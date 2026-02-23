@@ -83,32 +83,28 @@ const db = (() => {
     return { ok: true };
   }
 
-  function asignarCarrera(coordinacionId, carreraId, asignado) {
+  function guardarAsignaciones(coordinacionId, carrerasIds) {
     const estado = leer();
     const coordinacion = estado.coordinaciones.find((c) => c.id === coordinacionId);
 
     if (!coordinacion) {
-      return;
+      return { ok: false, mensaje: "La coordinación seleccionada no existe." };
     }
 
-    const yaAsignada = coordinacion.carrerasIds.includes(carreraId);
+    const carrerasValidas = new Set(estado.carreras.map((c) => c.id));
+    const idsUnicos = [...new Set(carrerasIds)].filter((idCarrera) => carrerasValidas.has(idCarrera));
 
-    if (asignado && !yaAsignada) {
-      coordinacion.carrerasIds.push(carreraId);
-    }
-
-    if (!asignado && yaAsignada) {
-      coordinacion.carrerasIds = coordinacion.carrerasIds.filter((idCarrera) => idCarrera !== carreraId);
-    }
-
+    coordinacion.carrerasIds = idsUnicos;
     guardar(estado);
+
+    return { ok: true };
   }
 
   return {
     leer,
     agregarCoordinacion,
     agregarCarrera,
-    asignarCarrera,
+    guardarAsignaciones,
   };
 })();
 
@@ -198,42 +194,60 @@ function renderAsignaciones() {
     return;
   }
 
-  contenedor.innerHTML = estado.coordinaciones
-    .map(
-      (coordinacion) => `
-      <article class="coordinacion-item">
-        <h3>${coordinacion.nombre}</h3>
-        <div class="checklist-carreras">
-          ${estado.carreras
-            .map(
-              (carrera) => `
-              <label>
-                <input
-                  type="checkbox"
-                  data-coordinacion-id="${coordinacion.id}"
-                  data-carrera-id="${carrera.id}"
-                  ${coordinacion.carrerasIds.includes(carrera.id) ? "checked" : ""}
-                >
-                ${carrera.nombre}
-              </label>
-            `
-            )
-            .join("")}
-        </div>
-      </article>
-    `
-    )
-    .join("");
+  contenedor.innerHTML = `
+    <form id="formAsignaciones" class="form-asignacion">
+      <label for="coordinacionSelect">Coordinación</label>
+      <select id="coordinacionSelect" required>
+        ${estado.coordinaciones
+          .map(
+            (coordinacion) =>
+              `<option value="${coordinacion.id}">${coordinacion.nombre}</option>`
+          )
+          .join("")}
+      </select>
 
-  contenedor.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-    checkbox.addEventListener("change", (e) => {
-      db.asignarCarrera(
-        e.target.dataset.coordinacionId,
-        e.target.dataset.carreraId,
-        e.target.checked
-      );
+      <label for="carrerasSelect">Carreras (selección múltiple)</label>
+      <select id="carrerasSelect" multiple size="8" required>
+        ${estado.carreras
+          .map((carrera) => `<option value="${carrera.id}">${carrera.nombre}</option>`)
+          .join("")}
+      </select>
+
+      <button type="submit">Guardar asignación</button>
+      <p class="ayuda-multiselect">Usa Ctrl (o Cmd en Mac) para seleccionar varias carreras.</p>
+    </form>
+  `;
+
+  const coordinacionSelect = document.getElementById("coordinacionSelect");
+  const carrerasSelect = document.getElementById("carrerasSelect");
+  const formAsignaciones = document.getElementById("formAsignaciones");
+
+  function sincronizarCarrerasSeleccionadas() {
+    const coordinacion = estado.coordinaciones.find((c) => c.id === coordinacionSelect.value);
+    const carrerasAsignadas = new Set(coordinacion?.carrerasIds || []);
+
+    [...carrerasSelect.options].forEach((option) => {
+      option.selected = carrerasAsignadas.has(option.value);
     });
+  }
+
+  coordinacionSelect.addEventListener("change", sincronizarCarrerasSeleccionadas);
+
+  formAsignaciones.addEventListener("submit", (e) => {
+    e.preventDefault();
+
+    const carrerasIds = [...carrerasSelect.selectedOptions].map((option) => option.value);
+    const resultado = db.guardarAsignaciones(coordinacionSelect.value, carrerasIds);
+
+    if (!resultado.ok) {
+      alert(resultado.mensaje);
+      return;
+    }
+
+    alert("Asignación guardada correctamente.");
   });
+
+  sincronizarCarrerasSeleccionadas();
 }
 
 btnMenu.addEventListener("click", () => {
