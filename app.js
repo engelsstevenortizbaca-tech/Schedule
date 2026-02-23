@@ -119,16 +119,49 @@ const db = (() => {
 })();
 
 function renderInicio() {
+  const estado = db.leer();
+  const asignadas = estado.coordinaciones.reduce((acc, item) => acc + item.carrerasIds.length, 0);
+
   contenido.innerHTML = `
-    <h1>Inicio</h1>
-    <p>Esta es la página principal de tu sistema.</p>
+    <section class="hero">
+      <h1>Panel de planificación académica</h1>
+      <p>
+        Interfaz inspirada en tu referencia de Schedule, rediseñada con una línea visual moderna,
+        tonos oscuros y enfoque de dashboard para administrar coordinaciones y carreras.
+      </p>
+
+      <div class="stats">
+        <article class="stat-card">
+          <h3>Coordinaciones</h3>
+          <strong>${estado.coordinaciones.length}</strong>
+        </article>
+        <article class="stat-card">
+          <h3>Carreras</h3>
+          <strong>${estado.carreras.length}</strong>
+        </article>
+        <article class="stat-card">
+          <h3>Asignaciones activas</h3>
+          <strong>${asignadas}</strong>
+        </article>
+      </div>
+    </section>
+
+    <section class="card-config">
+      <h2>¿Qué puedes hacer aquí?</h2>
+      <p class="empty-msg">
+        Usa la sección <strong>Configuración</strong> para registrar coordinaciones, crear carreras y asignarlas
+        sin duplicidades entre coordinaciones. Toda la información se guarda en tu navegador con LocalStorage.
+      </p>
+    </section>
   `;
 }
 
 function renderConfiguracion() {
   contenido.innerHTML = `
-    <h1>Configuraciones</h1>
-    <p>Gestión temporal con LocalStorage (simulando base de datos).</p>
+    <section class="hero">
+      <h1>Configuración académica</h1>
+      <p>Administra catálogos base para armar la estructura del sistema de horarios.</p>
+    </section>
 
     <section class="panel-config">
       <div class="card-config">
@@ -195,12 +228,12 @@ function renderAsignaciones() {
   }
 
   if (estado.coordinaciones.length === 0) {
-    contenedor.innerHTML = "<p>Primero registra al menos una coordinación.</p>";
+    contenedor.innerHTML = "<p class='empty-msg'>Primero registra al menos una coordinación.</p>";
     return;
   }
 
   if (estado.carreras.length === 0) {
-    contenedor.innerHTML = "<p>Primero registra al menos una carrera.</p>";
+    contenedor.innerHTML = "<p class='empty-msg'>Primero registra al menos una carrera.</p>";
     return;
   }
 
@@ -291,6 +324,7 @@ function renderAsignaciones() {
 
     alert("Asignación guardada correctamente.");
     renderAsignaciones();
+    renderInicio();
   });
 
   sincronizarCarrerasSeleccionadas();
@@ -318,3 +352,5 @@ links.forEach((link) => {
     sidebar.classList.remove("active");
   });
 });
+
+renderInicio();
