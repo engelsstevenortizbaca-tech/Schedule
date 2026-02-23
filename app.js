@@ -94,6 +94,16 @@ const db = (() => {
     const carrerasValidas = new Set(estado.carreras.map((c) => c.id));
     const idsUnicos = [...new Set(carrerasIds)].filter((idCarrera) => carrerasValidas.has(idCarrera));
 
+    estado.coordinaciones.forEach((itemCoordinacion) => {
+      if (itemCoordinacion.id === coordinacionId) {
+        return;
+      }
+
+      itemCoordinacion.carrerasIds = itemCoordinacion.carrerasIds.filter(
+        (idCarrera) => !idsUnicos.includes(idCarrera)
+      );
+    });
+
     coordinacion.carrerasIds = idsUnicos;
     guardar(estado);
 
@@ -216,17 +226,52 @@ function renderAsignaciones() {
       <button type="submit">Guardar asignación</button>
       <p class="ayuda-multiselect">Usa Ctrl (o Cmd en Mac) para seleccionar varias carreras.</p>
     </form>
+    <div id="resumenAsignaciones"></div>
   `;
 
   const coordinacionSelect = document.getElementById("coordinacionSelect");
   const carrerasSelect = document.getElementById("carrerasSelect");
   const formAsignaciones = document.getElementById("formAsignaciones");
+  const resumenAsignaciones = document.getElementById("resumenAsignaciones");
+
+  function crearMapaAsignaciones() {
+    const mapa = new Map();
+
+    estado.coordinaciones.forEach((coordinacion) => {
+      coordinacion.carrerasIds.forEach((idCarrera) => {
+        mapa.set(idCarrera, coordinacion.id);
+      });
+    });
+
+    return mapa;
+  }
+
+  function renderResumenAsignaciones() {
+    const lista = estado.coordinaciones
+      .map((coordinacion) => {
+        const nombresCarreras = coordinacion.carrerasIds
+          .map((idCarrera) => estado.carreras.find((carrera) => carrera.id === idCarrera)?.nombre)
+          .filter(Boolean);
+
+        const detalle = nombresCarreras.length > 0 ? nombresCarreras.join(", ") : "Sin carreras asignadas.";
+        return `<li><strong>${coordinacion.nombre}:</strong> ${detalle}</li>`;
+      })
+      .join("");
+
+    resumenAsignaciones.innerHTML = `
+      <h3>Distribución actual de carreras</h3>
+      <ul>${lista}</ul>
+    `;
+  }
 
   function sincronizarCarrerasSeleccionadas() {
     const coordinacion = estado.coordinaciones.find((c) => c.id === coordinacionSelect.value);
     const carrerasAsignadas = new Set(coordinacion?.carrerasIds || []);
+    const mapaAsignaciones = crearMapaAsignaciones();
 
     [...carrerasSelect.options].forEach((option) => {
+      const coordinacionActual = mapaAsignaciones.get(option.value);
+      option.disabled = Boolean(coordinacionActual && coordinacionActual !== coordinacionSelect.value);
       option.selected = carrerasAsignadas.has(option.value);
     });
   }
@@ -245,9 +290,11 @@ function renderAsignaciones() {
     }
 
     alert("Asignación guardada correctamente.");
+    renderAsignaciones();
   });
 
   sincronizarCarrerasSeleccionadas();
+  renderResumenAsignaciones();
 }
 
 btnMenu.addEventListener("click", () => {
