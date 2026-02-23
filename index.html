@@ -2,28 +2,32 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Horario - Menú Lateral</title>
+  <title>Schedule | Panel Académico</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- CSS externo -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="estilos.css">
 </head>
 <body>
+  <button class="menu-btn" id="btnMenu" aria-label="Abrir menú">☰</button>
 
-  <button class="menu-btn" id="btnMenu">☰</button>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <h2>Schedule</h2>
+    </div>
 
-  <div class="sidebar" id="sidebar">
-    <h2>Horario</h2>
-    <a href="#" data-seccion="inicio">🏠 Inicio</a>
-    <a href="#" data-seccion="config">⚙️ Configuraciones</a>
-  </div>
+    <nav class="menu-links">
+      <a href="#" data-seccion="inicio">🏠 Inicio</a>
+      <a href="#" data-seccion="config">⚙️ Configuración</a>
+    </nav>
 
-  <div class="content" id="contenido">
-    <h1>Bienvenido</h1>
-    <p>Selecciona una opción del menú.</p>
-  </div>
+    <p class="sidebar-foot">v1 · Inspirado en tu referencia, con identidad propia.</p>
+  </aside>
 
-  <!-- JS externo -->
+  <main class="content" id="contenido"></main>
+
   <script src="app.js"></script>
 </body>
 </html>
