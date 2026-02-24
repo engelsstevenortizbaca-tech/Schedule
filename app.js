@@ -23,8 +23,8 @@ const coordinaciones = {
 
 const state = {
   clases: [
-    { coordinacion: 'Arquitectura', carrera: 'Arquitectura', clase: 'Taller de Diseño', caracteristicas: ['diurno', 'taller'], docente: 'Ing. José Pérez', area: 'Tecnología' },
-    { coordinacion: 'Arquitectura', carrera: 'Diseño Gráfico', clase: 'Identidad Nacional', caracteristicas: ['diurno', 'aula'], docente: 'MSc. María López', area: 'Ciencias Básicas' },
+    { coordinacion: 'Arquitectura', carrera: 'Arquitectura', clase: 'Taller de Diseño', aula: 'A-101', caracteristicas: ['diurno', 'taller'], docente: 'Ing. José Pérez', area: 'Tecnología' },
+    { coordinacion: 'Arquitectura', carrera: 'Diseño Gráfico', clase: 'Identidad Nacional', aula: 'B-204', caracteristicas: ['diurno', 'aula'], docente: 'MSc. María López', area: 'Ciencias Básicas' },
   ],
   docentes: [
     { nombre: 'MSc. María López', area: 'Ciencias Básicas' },
@@ -32,10 +32,10 @@ const state = {
   ],
   areas: ['Ciencias Básicas', 'Tecnología'],
   turnoConfig: {
-    Diurno: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes' },
-    Sabatino: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Sábado' },
-    Nocturno: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes' },
-    Dominical: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Domingo' },
+    Diurno: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes', aula: '' },
+    Sabatino: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Sábado', aula: '' },
+    Nocturno: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes', aula: '' },
+    Dominical: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Domingo', aula: '' },
   },
   matricula: {},
 };
@@ -92,7 +92,7 @@ const renderCatalogoTabla = () => {
   tbody.innerHTML = '';
   state.clases.forEach((item) => {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${item.coordinacion}</td><td>${item.carrera}</td><td>${item.clase}</td><td>${item.caracteristicas.map((tag) => `<span class="tag">${tag}</span>`).join(' ')}</td><td>${item.docente}</td><td>${item.area}</td>`;
+    tr.innerHTML = `<td>${item.coordinacion}</td><td>${item.carrera}</td><td>${item.clase}</td><td>${item.aula || ''}</td><td>${item.caracteristicas.map((tag) => `<span class="tag">${tag}</span>`).join(' ')}</td><td>${item.docente}</td><td>${item.area}</td>`;
     tbody.appendChild(tr);
   });
 };
@@ -132,7 +132,7 @@ importBtn?.addEventListener('click', () => {
     }
 
     const headers = lines[0].split(',').map((item) => item.trim().toLowerCase());
-    const required = ['clase', 'creditos', 'compartida', 'anio', 'categoria', 'tipo'];
+    const required = ['clase', 'creditos', 'compartida', 'anio', 'categoria', 'tipo', 'aula'];
     const missing = required.filter((field) => !headers.includes(field));
     if (missing.length) {
       setHint('carga-hint', `Faltan columnas: ${missing.join(', ')}`, false);
@@ -143,9 +143,12 @@ importBtn?.addEventListener('click', () => {
     const carrera = document.getElementById('carga-carrera')?.value || 'Arquitectura';
     const claseIdx = headers.indexOf('clase');
     const tipoIdx = headers.indexOf('tipo');
+    const aulaIdx = headers.indexOf('aula');
 
     const imported = lines.slice(1).map((line) => {
       const cols = line.split(',').map((item) => item.trim());
+      const aula = cols[aulaIdx];
+      if (!aula) return null;
       return {
         coordinacion,
         carrera,
@@ -153,12 +156,19 @@ importBtn?.addEventListener('click', () => {
         caracteristicas: ['csv', cols[tipoIdx] || 'aula'],
         docente: 'Por asignar',
         area: 'Por asignar',
+        aula: cols[aulaIdx],
       };
     });
 
-    state.clases.push(...imported);
+    const importedValid = imported.filter(Boolean);
+    if (!importedValid.length) {
+      setHint('carga-hint', 'No se importó ninguna clase porque falta el aula en las filas del CSV.', false);
+      return;
+    }
+
+    state.clases.push(...importedValid);
     renderCatalogoTabla();
-    setHint('carga-hint', `Se importaron ${imported.length} clases desde CSV.`);
+    setHint('carga-hint', `Se importaron ${importedValid.length} clases desde CSV.`);
   };
   reader.readAsText(file);
 });
@@ -171,6 +181,12 @@ addManualBtn?.addEventListener('click', () => {
     return;
   }
 
+  const aula = window.prompt('Aula donde se impartirá la clase:');
+  if (!aula || !aula.trim()) {
+    setHint('asignacion-hint', 'Debes indicar el aula de la clase.', false);
+    return;
+  }
+
   state.clases.push({
     coordinacion: document.getElementById('asignacion-coordinacion')?.value || 'Arquitectura',
     carrera: state.clases[0]?.carrera || 'Arquitectura',
@@ -178,6 +194,7 @@ addManualBtn?.addEventListener('click', () => {
     caracteristicas: ['manual'],
     docente: 'Por asignar',
     area: 'Por asignar',
+    aula: aula.trim(),
   });
   renderCatalogoTabla();
   setHint('asignacion-hint', `Clase "${clase}" agregada correctamente.`);
@@ -217,7 +234,8 @@ generateBtn?.addEventListener('click', () => {
     return;
   }
   vistaRows.forEach((cell, index) => {
-    cell.textContent = clasesCarrera[index]?.clase || '-';
+    const clase = clasesCarrera[index];
+    cell.textContent = clase ? `${clase.clase} (${clase.aula})` : '-';
   });
   consola.textContent = `Horario generado para ${carrera} con ${Math.min(clasesCarrera.length, vistaRows.length)} bloques llenos.`;
 });
@@ -235,6 +253,7 @@ const duracionInput = document.getElementById('turno-duracion');
 const creditosInput = document.getElementById('turno-creditos');
 const maxTurnosInput = document.getElementById('turno-max-turnos');
 const diasInput = document.getElementById('turno-dias');
+const aulaInput = document.getElementById('turno-aula');
 
 const loadTurno = () => {
   const turno = turnoSelect?.value;
@@ -244,6 +263,7 @@ const loadTurno = () => {
   creditosInput.value = cfg.creditos;
   maxTurnosInput.value = cfg.maxTurnos;
   diasInput.value = cfg.dias || getDiasPorTurno(turno);
+  aulaInput.value = cfg.aula || '';
 };
 
 turnoSelect?.addEventListener('change', () => {
@@ -253,14 +273,21 @@ turnoSelect?.addEventListener('change', () => {
 
 document.getElementById('btn-guardar-turno')?.addEventListener('click', () => {
   const turno = turnoSelect.value;
+  const aula = aulaInput.value.trim();
+  if (!aula) {
+    setHint('turno-hint', 'Debes escribir el aula antes de guardar.', false);
+    return;
+  }
+
   state.turnoConfig[turno] = {
     duracion: Number(duracionInput.value || 45),
     creditos: Number(creditosInput.value || 1),
     maxTurnos: Number(maxTurnosInput.value || 4),
     dias: getDiasPorTurno(turno),
+    aula: aulaInput.value.trim(),
   };
   diasInput.value = getDiasPorTurno(turno);
-  setHint('turno-hint', `Configuración de ${turno} guardada con días: ${state.turnoConfig[turno].dias}.`);
+  setHint('turno-hint', `Configuración de ${turno} guardada con días: ${state.turnoConfig[turno].dias} y aula: ${state.turnoConfig[turno].aula}.`);
 });
 
 document.getElementById('btn-restablecer-turno')?.addEventListener('click', () => {
@@ -270,6 +297,7 @@ document.getElementById('btn-restablecer-turno')?.addEventListener('click', () =
     creditos: 1,
     maxTurnos: 4,
     dias: getDiasPorTurno(turno),
+    aula: '',
   };
   loadTurno();
   setHint('turno-hint', 'Valores restablecidos por defecto.');
