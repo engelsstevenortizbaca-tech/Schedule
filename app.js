@@ -32,10 +32,10 @@ const state = {
   ],
   areas: ['Ciencias Básicas', 'Tecnología'],
   turnoConfig: {
-    Diurno: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes', aula: '' },
-    Sabatino: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Sábado', aula: '' },
-    Nocturno: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes', aula: '' },
-    Dominical: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Domingo', aula: '' },
+    Diurno: { horaInicio: '08:00', duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes', aula: '', recesoInicio: '', recesoFin: '', almuerzoInicio: '', almuerzoFin: '' },
+    Sabatino: { horaInicio: '08:00', duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Sábado', aula: '', recesoInicio: '', recesoFin: '', almuerzoInicio: '', almuerzoFin: '' },
+    Nocturno: { horaInicio: '18:00', duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes', aula: '', recesoInicio: '', recesoFin: '', almuerzoInicio: '', almuerzoFin: '' },
+    Dominical: { horaInicio: '08:00', duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Domingo', aula: '', recesoInicio: '', recesoFin: '', almuerzoInicio: '', almuerzoFin: '' },
   },
   matricula: {},
   seleccionActual: { coordinacion: 'Arquitectura', carrera: 'Arquitectura', turno: 'Diurno' },
@@ -104,12 +104,57 @@ const syncTurnoSelects = (selected = 'Diurno') => {
   });
 };
 
-const bloquesVista = [
-  { codigo: '01', hora: '8:00-9:10' },
-  { codigo: '02', hora: '9:20-10:30' },
-  { codigo: '03', hora: '10:40-11:50' },
-  { codigo: '04', hora: '11:50-1:00' },
-];
+
+const formatTimeFromMinutes = (minutes) => {
+  const normalized = ((Number(minutes) || 0) % (24 * 60) + (24 * 60)) % (24 * 60);
+  const hours = Math.floor(normalized / 60);
+  const mins = normalized % 60;
+  return `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+};
+
+const parseTimeToMinutes = (time = '08:00') => {
+  const match = String(time).match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return 8 * 60;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return 8 * 60;
+  return (hours * 60) + minutes;
+};
+
+
+const rangesOverlap = (startA, endA, startB, endB) => startA < endB && startB < endA;
+
+const getBloqueRestriction = (start, end, cfg) => {
+  const recesoInicio = parseTimeToMinutes(cfg?.recesoInicio || '');
+  const recesoFin = parseTimeToMinutes(cfg?.recesoFin || '');
+  const almuerzoInicio = parseTimeToMinutes(cfg?.almuerzoInicio || '');
+  const almuerzoFin = parseTimeToMinutes(cfg?.almuerzoFin || '');
+
+  const hasReceso = Boolean(cfg?.recesoInicio && cfg?.recesoFin) && recesoInicio < recesoFin;
+  if (hasReceso && rangesOverlap(start, end, recesoInicio, recesoFin)) return 'RECESO';
+
+  const hasAlmuerzo = Boolean(cfg?.almuerzoInicio && cfg?.almuerzoFin) && almuerzoInicio < almuerzoFin;
+  if (hasAlmuerzo && rangesOverlap(start, end, almuerzoInicio, almuerzoFin)) return 'ALMUERZO';
+
+  return '';
+};
+
+const getBloquesVista = (turno) => {
+  const cfg = state.turnoConfig[turno] || state.turnoConfig.Diurno;
+  const totalBloques = Math.max(Number(cfg?.maxTurnos || 4), 1);
+  const duracion = Math.max(Number(cfg?.duracion || 45), 1);
+  const inicio = parseTimeToMinutes(cfg?.horaInicio || '08:00');
+
+  return Array.from({ length: totalBloques }, (_, index) => {
+    const start = inicio + (index * duracion);
+    const end = start + duracion;
+    return {
+      codigo: String(index + 1).padStart(2, '0'),
+      hora: `${formatTimeFromMinutes(start)}-${formatTimeFromMinutes(end)}`,
+      restriccion: getBloqueRestriction(start, end, cfg),
+    };
+  });
+};
 
 const getDiasArray = (turno) => (getDiasPorTurno(turno) || 'Día')
   .split(',')
@@ -117,6 +162,7 @@ const getDiasArray = (turno) => (getDiasPorTurno(turno) || 'Día')
   .filter(Boolean);
 
 const renderVistaTable = (turno) => {
+  const bloquesVista = getBloquesVista(turno);
   const thead = document.getElementById('vista-thead');
   const tbody = document.getElementById('vista-tbody');
   if (!thead || !tbody) return;
@@ -135,7 +181,7 @@ const renderVistaTable = (turno) => {
     let cells = `<td>${bloque.codigo}<br><small>${bloque.hora}</small></td>`;
     safeDias.forEach((_, diaIndex) => {
       const slot = (bloqueIndex * safeDias.length) + diaIndex;
-      cells += `<td class="vista-clase" data-slot="${slot}">-</td><td class="vista-aula" data-slot="${slot}">-</td>`;
+      cells += `<td class="vista-clase" data-slot="${slot}" data-restriccion="${bloque.restriccion}">-</td><td class="vista-aula" data-slot="${slot}" data-restriccion="${bloque.restriccion}">-</td>`;
     });
     return `<tr>${cells}</tr>`;
   }).join('');
@@ -360,17 +406,25 @@ generateBtn?.addEventListener('click', () => {
   applyDiasByTurnoToView(turno);
   const { claseCells, aulaCells } = getVistaCells();
 
+  let claseIndex = 0;
+  let bloquesRestringidos = 0;
+
   claseCells.forEach((cell, index) => {
-    const clase = clasesSeleccion[index];
+    const restriccion = cell.dataset.restriccion;
+    if (restriccion) {
+      cell.textContent = restriccion;
+      aulaCells[index].textContent = '-';
+      bloquesRestringidos += 1;
+      return;
+    }
+
+    const clase = clasesSeleccion[claseIndex];
     cell.textContent = clase ? clase.clase : '-';
+    aulaCells[index].textContent = clase?.aula || state.turnoConfig[turno]?.aula || '-';
+    if (clase) claseIndex += 1;
   });
 
-  aulaCells.forEach((cell, index) => {
-    const clase = clasesSeleccion[index];
-    cell.textContent = clase?.aula || state.turnoConfig[turno]?.aula || '-';
-  });
-
-  consola.textContent = `Horario generado para ${coordinacion} / ${carrera} / ${turno} con ${Math.min(clasesSeleccion.length, claseCells.length)} bloques llenos.`;
+  consola.textContent = `Horario generado para ${coordinacion} / ${carrera} / ${turno}. Clases asignadas: ${claseIndex}. Bloques reservados por receso/almuerzo: ${bloquesRestringidos}.`;
 });
 
 const resetBtn = document.getElementById('btn-reiniciar-demo');
@@ -386,21 +440,31 @@ resetBtn?.addEventListener('click', () => {
 });
 
 const turnoSelect = document.getElementById('turno-config-select');
+const horaInicioInput = document.getElementById('turno-hora-inicio');
 const duracionInput = document.getElementById('turno-duracion');
 const creditosInput = document.getElementById('turno-creditos');
 const maxTurnosInput = document.getElementById('turno-max-turnos');
 const diasInput = document.getElementById('turno-dias');
 const aulaInput = document.getElementById('turno-aula');
+const recesoInicioInput = document.getElementById('turno-receso-inicio');
+const recesoFinInput = document.getElementById('turno-receso-fin');
+const almuerzoInicioInput = document.getElementById('turno-almuerzo-inicio');
+const almuerzoFinInput = document.getElementById('turno-almuerzo-fin');
 
 const loadTurno = () => {
   const turno = turnoSelect?.value;
   if (!turno || !state.turnoConfig[turno]) return;
   const cfg = state.turnoConfig[turno];
+  horaInicioInput.value = cfg.horaInicio || '08:00';
   duracionInput.value = cfg.duracion;
   creditosInput.value = cfg.creditos;
   maxTurnosInput.value = cfg.maxTurnos;
   diasInput.value = cfg.dias || getDiasPorTurno(turno);
   aulaInput.value = cfg.aula || '';
+  recesoInicioInput.value = cfg.recesoInicio || '';
+  recesoFinInput.value = cfg.recesoFin || '';
+  almuerzoInicioInput.value = cfg.almuerzoInicio || '';
+  almuerzoFinInput.value = cfg.almuerzoFin || '';
 };
 
 turnoSelect?.addEventListener('change', () => {
@@ -416,12 +480,27 @@ document.getElementById('btn-guardar-turno')?.addEventListener('click', () => {
     return;
   }
 
+  if (recesoInicioInput.value && recesoFinInput.value && recesoInicioInput.value >= recesoFinInput.value) {
+    setHint('turno-hint', 'El receso debe tener una hora de fin mayor a la de inicio.', false);
+    return;
+  }
+
+  if (almuerzoInicioInput.value && almuerzoFinInput.value && almuerzoInicioInput.value >= almuerzoFinInput.value) {
+    setHint('turno-hint', 'El almuerzo debe tener una hora de fin mayor a la de inicio.', false);
+    return;
+  }
+
   state.turnoConfig[turno] = {
+    horaInicio: horaInicioInput.value || '08:00',
     duracion: Number(duracionInput.value || 45),
     creditos: Number(creditosInput.value || 1),
     maxTurnos: Number(maxTurnosInput.value || 4),
     dias: getDiasPorTurno(turno),
     aula: aulaInput.value.trim(),
+    recesoInicio: recesoInicioInput.value || '',
+    recesoFin: recesoFinInput.value || '',
+    almuerzoInicio: almuerzoInicioInput.value || '',
+    almuerzoFin: almuerzoFinInput.value || '',
   };
 
   state.clases = state.clases.map((item) => {
@@ -431,19 +510,26 @@ document.getElementById('btn-guardar-turno')?.addEventListener('click', () => {
 
   diasInput.value = getDiasPorTurno(turno);
   renderCatalogoTabla();
-  setHint('turno-hint', `Configuración de ${turno} guardada con días: ${state.turnoConfig[turno].dias} y aula: ${state.turnoConfig[turno].aula}.`);
+  applyDiasByTurnoToView(state.seleccionActual.turno);
+  setHint('turno-hint', `Configuración de ${turno} guardada. Se respetan receso/almuerzo y bloques desde ${state.turnoConfig[turno].horaInicio}.`);
 });
 
 document.getElementById('btn-restablecer-turno')?.addEventListener('click', () => {
   const turno = turnoSelect.value;
   state.turnoConfig[turno] = {
+    horaInicio: turno === 'Nocturno' ? '18:00' : '08:00',
     duracion: 45,
     creditos: 1,
     maxTurnos: 4,
     dias: getDiasPorTurno(turno),
     aula: '',
+    recesoInicio: '',
+    recesoFin: '',
+    almuerzoInicio: '',
+    almuerzoFin: '',
   };
   loadTurno();
+  applyDiasByTurnoToView(state.seleccionActual.turno);
   setHint('turno-hint', 'Valores restablecidos por defecto.');
 });
 
