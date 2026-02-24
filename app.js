@@ -104,12 +104,45 @@ const syncTurnoSelects = (selected = 'Diurno') => {
   });
 };
 
+const bloquesVista = [
+  { codigo: '01', hora: '8:00-9:10' },
+  { codigo: '02', hora: '9:20-10:30' },
+  { codigo: '03', hora: '10:40-11:50' },
+  { codigo: '04', hora: '11:50-1:00' },
+];
+
+const getDiasArray = (turno) => (getDiasPorTurno(turno) || 'Día')
+  .split(',')
+  .map((dia) => dia.trim())
+  .filter(Boolean);
+
+const renderVistaTable = (turno) => {
+  const thead = document.getElementById('vista-thead');
+  const tbody = document.getElementById('vista-tbody');
+  if (!thead || !tbody) return;
+
+  const dias = getDiasArray(turno);
+  const safeDias = dias.length ? dias : ['Día'];
+
+  let headerHtml = '<tr><th>Bloque</th>';
+  safeDias.forEach((dia) => {
+    headerHtml += `<th class="vista-dia-header">${dia}</th><th class="vista-aula-header">Aula</th>`;
+  });
+  headerHtml += '</tr>';
+  thead.innerHTML = headerHtml;
+
+  tbody.innerHTML = bloquesVista.map((bloque, bloqueIndex) => {
+    let cells = `<td>${bloque.codigo}<br><small>${bloque.hora}</small></td>`;
+    safeDias.forEach((_, diaIndex) => {
+      const slot = (bloqueIndex * safeDias.length) + diaIndex;
+      cells += `<td class="vista-clase" data-slot="${slot}">-</td><td class="vista-aula" data-slot="${slot}">-</td>`;
+    });
+    return `<tr>${cells}</tr>`;
+  }).join('');
+};
+
 const applyDiasByTurnoToView = (turno) => {
-  const vistaBody = document.querySelector('#vista tbody');
-  if (!vistaBody) return;
-  const dias = getDiasPorTurno(turno) || 'Día';
-  const encabezadoDia = document.querySelector('#vista thead th:last-child');
-  if (encabezadoDia) encabezadoDia.textContent = dias;
+  renderVistaTable(turno);
 };
 
 const updateSeleccionActual = () => {
@@ -291,7 +324,11 @@ editClassBtn?.addEventListener('click', () => {
 });
 
 const consola = document.getElementById('generacion-console');
-const vistaRows = document.querySelectorAll('#vista tbody tr td:last-child');
+
+const getVistaCells = () => ({
+  claseCells: document.querySelectorAll('#vista-tbody .vista-clase'),
+  aulaCells: document.querySelectorAll('#vista-tbody .vista-aula'),
+});
 
 const generateBtn = document.getElementById('btn-generar-auto');
 generateBtn?.addEventListener('click', () => {
@@ -321,16 +358,28 @@ generateBtn?.addEventListener('click', () => {
   }
 
   applyDiasByTurnoToView(turno);
-  vistaRows.forEach((cell, index) => {
+  const { claseCells, aulaCells } = getVistaCells();
+
+  claseCells.forEach((cell, index) => {
     const clase = clasesSeleccion[index];
-    cell.textContent = clase ? `${clase.clase} (${clase.aula})` : '-';
+    cell.textContent = clase ? clase.clase : '-';
   });
-  consola.textContent = `Horario generado para ${coordinacion} / ${carrera} / ${turno} con ${Math.min(clasesSeleccion.length, vistaRows.length)} bloques llenos.`;
+
+  aulaCells.forEach((cell, index) => {
+    const clase = clasesSeleccion[index];
+    cell.textContent = clase?.aula || state.turnoConfig[turno]?.aula || '-';
+  });
+
+  consola.textContent = `Horario generado para ${coordinacion} / ${carrera} / ${turno} con ${Math.min(clasesSeleccion.length, claseCells.length)} bloques llenos.`;
 });
 
 const resetBtn = document.getElementById('btn-reiniciar-demo');
 resetBtn?.addEventListener('click', () => {
-  vistaRows.forEach((cell) => {
+  const { claseCells, aulaCells } = getVistaCells();
+  claseCells.forEach((cell) => {
+    cell.textContent = '-';
+  });
+  aulaCells.forEach((cell) => {
     cell.textContent = '-';
   });
   consola.textContent = 'Demo reiniciada. Puedes generar nuevamente.';

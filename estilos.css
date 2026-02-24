@@ -280,3 +280,12 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+#vista .vista-dia-header {
+  min-width: 160px;
+}
+
+#vista .vista-aula,
+#vista .vista-aula-header {
+  min-width: 110px;
+}
