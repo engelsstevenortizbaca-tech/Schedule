@@ -26,89 +26,202 @@
   </aside>
 
   <main class="content">
-    <section class="panel" id="carga">
-      <h3>1) Cargar clases por CSV y listado de clases</h3>
-      <p class="hint">Columnas esperadas: clase,creditos,compartida,anio,categoria,tipo</p>
+    <div class="view active" id="principal-view">
+      <section class="panel" id="carga">
+        <h3>1) Cargar clases por CSV y listado de clases</h3>
+        <p class="hint">Columnas esperadas: clase,creditos,compartida,anio,categoria,tipo</p>
 
-      <div class="row-3">
-        <div>
-          <label>Coordinación</label>
-          <select><option>Arquitectura</option></select>
+        <div class="row-3">
+          <div>
+            <label>Coordinación</label>
+            <select><option>Arquitectura</option></select>
+          </div>
+          <div>
+            <label>Carrera</label>
+            <select><option>Diseño Gráfico</option></select>
+          </div>
+          <div>
+            <label>Turno</label>
+            <select><option>Diurno</option></select>
+          </div>
         </div>
-        <div>
-          <label>Carrera</label>
-          <select><option>Diseño Gráfico</option></select>
+
+        <div class="file-row">
+          <input type="file">
+          <button class="btn-primary">Importar CSV</button>
         </div>
-        <div>
-          <label>Turno</label>
-          <select><option>Diurno</option></select>
+
+        <p class="hint">Sin importación todavía.</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Coordinación</th><th>Carrera</th><th>Clase</th><th>Características</th><th>Docente preferido</th><th>Área</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Arquitectura</td><td>Arquitectura</td><td>Taller de Diseño</td><td><span class="tag">diurno</span> <span class="tag">taller</span></td><td>Ing. José Pérez</td><td>Tecnología</td></tr>
+            <tr><td>Arquitectura</td><td>Diseño Gráfico</td><td>Identidad Nacional</td><td><span class="tag">diurno</span> <span class="tag">aula</span></td><td>MSc. María López</td><td>Ciencias Básicas</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel" id="asignacion">
+        <h3>2) Asignación y cambios manuales</h3>
+        <div class="row-2">
+          <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
+          <div><label>Turno</label><select><option>Diurno</option></select></div>
         </div>
-      </div>
+        <div class="btn-row">
+          <button class="btn-dark">Agregar clase manualmente</button>
+          <button class="btn-outline">Cambiar clase existente</button>
+        </div>
+        <p class="hint">Sin acciones todavía.</p>
+      </section>
 
-      <div class="file-row">
-        <input type="file">
-        <button class="btn-primary">Importar CSV</button>
-      </div>
+      <section class="panel" id="generacion">
+        <h3>3) Generación automática por carrera</h3>
+        <p class="hint">Genera horario únicamente para la coordinación/carrera/turno seleccionadas en la carga CSV.</p>
+        <div class="row-3">
+          <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
+          <div><label>Carrera</label><select><option>Arquitectura</option></select></div>
+          <div><label>Turno</label><select><option>Diurno</option></select></div>
+        </div>
+        <div class="row-2">
+          <button class="btn-dark">Generar automáticamente</button>
+          <button class="btn-outline">Reiniciar demo</button>
+        </div>
+        <div class="console">Debes seleccionar/completar clases cargadas por CSV para la selección actual, o que la selección de generación automática coincida con la selección realizada en el módulo CSV.</div>
+      </section>
 
-      <p class="hint">Sin importación todavía.</p>
-      <table>
-        <thead>
-          <tr>
-            <th>Coordinación</th><th>Carrera</th><th>Clase</th><th>Características</th><th>Docente preferido</th><th>Área</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Arquitectura</td><td>Arquitectura</td><td>Taller de Diseño</td><td><span class="tag">diurno</span> <span class="tag">taller</span></td><td>Ing. José Pérez</td><td>Tecnología</td></tr>
-          <tr><td>Arquitectura</td><td>Diseño Gráfico</td><td>Identidad Nacional</td><td><span class="tag">diurno</span> <span class="tag">aula</span></td><td>MSc. María López</td><td>Ciencias Básicas</td></tr>
-        </tbody>
-      </table>
-    </section>
+      <section class="panel" id="vista">
+        <h3>4) Vista por coordinación / carrera / turno</h3>
+        <div class="row-3">
+          <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
+          <div><label>Carrera</label><select><option>Arquitectura</option></select></div>
+          <div><label>Turno</label><select><option>Dominical</option></select></div>
+        </div>
+        <table>
+          <thead><tr><th>Bloque</th><th>Domingo</th></tr></thead>
+          <tbody>
+            <tr><td>01<br><small>8:00-9:10</small></td><td>-</td></tr>
+            <tr><td>02<br><small>9:20-10:30</small></td><td>-</td></tr>
+            <tr><td>03<br><small>10:40-11:50</small></td><td>-</td></tr>
+            <tr><td>04<br><small>11:50-1:00</small></td><td>-</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
 
-    <section class="panel" id="asignacion">
-      <h3>2) Asignación y cambios manuales</h3>
-      <div class="row-2">
-        <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
-        <div><label>Turno</label><select><option>Diurno</option></select></div>
-      </div>
-      <div class="btn-row">
-        <button class="btn-dark">Agregar clase manualmente</button>
-        <button class="btn-outline">Cambiar clase existente</button>
-      </div>
-      <p class="hint">Sin acciones todavía.</p>
-    </section>
+    <div class="view" id="config-view">
+      <section class="panel">
+        <h3>⚙️ Configuración por turno</h3>
+        <p class="hint">Define duración de bloque, créditos, días habilitados y máximo de turnos por día.</p>
+        <label>Turno</label>
+        <select>
+          <option>Diurno</option>
+          <option>Nocturno</option>
+          <option>Dominical</option>
+        </select>
 
-    <section class="panel" id="generacion">
-      <h3>3) Generación automática por carrera</h3>
-      <p class="hint">Genera horario únicamente para la coordinación/carrera/turno seleccionadas en la carga CSV.</p>
-      <div class="row-3">
-        <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
-        <div><label>Carrera</label><select><option>Arquitectura</option></select></div>
-        <div><label>Turno</label><select><option>Diurno</option></select></div>
-      </div>
-      <div class="row-2">
-        <button class="btn-dark">Generar automáticamente</button>
-        <button class="btn-outline">Reiniciar demo</button>
-      </div>
-      <div class="console">Debes seleccionar/completar clases cargadas por CSV para la selección actual, o que la selección de generación automática coincida con la selección realizada en el módulo CSV.</div>
-    </section>
+        <div class="row-3">
+          <div>
+            <label>Duración por bloque (min)</label>
+            <input type="number" value="45">
+          </div>
+          <div>
+            <label>Créditos por bloque</label>
+            <input type="number" value="1">
+          </div>
+          <div>
+            <label>Máx. turnos por día (carrera)</label>
+            <input type="number" value="4">
+          </div>
+        </div>
 
-    <section class="panel" id="vista">
-      <h3>4) Vista por coordinación / carrera / turno</h3>
-      <div class="row-3">
-        <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
-        <div><label>Carrera</label><select><option>Arquitectura</option></select></div>
-        <div><label>Turno</label><select><option>Dominical</option></select></div>
-      </div>
-      <table>
-        <thead><tr><th>Bloque</th><th>Domingo</th></tr></thead>
-        <tbody>
-          <tr><td>01<br><small>8:00-9:10</small></td><td>-</td></tr>
-          <tr><td>02<br><small>9:20-10:30</small></td><td>-</td></tr>
-          <tr><td>03<br><small>10:40-11:50</small></td><td>-</td></tr>
-          <tr><td>04<br><small>11:50-1:00</small></td><td>-</td></tr>
-        </tbody>
-      </table>
-    </section>
+        <label>Días habilitados (separados por coma)</label>
+        <input type="text" value="Lunes,Martes,Miércoles,Jueves,Viernes">
+
+        <div class="row-4">
+          <div>
+            <label>Receso (inicio - fin)</label>
+            <div class="row-2 compact-row">
+              <input type="time">
+              <input type="time">
+            </div>
+          </div>
+          <div>
+            <label>Almuerzo (inicio - fin)</label>
+            <div class="row-2 compact-row">
+              <input type="time">
+              <input type="time">
+            </div>
+          </div>
+        </div>
+
+        <div class="inline-actions">
+          <button class="btn-primary">Guardar turno</button>
+          <button class="btn-dark">Restablecer por defecto</button>
+        </div>
+        <p class="hint">Sin cambios.</p>
+      </section>
+
+      <section class="panel">
+        <h3>👥 Gestión de docentes y áreas</h3>
+        <div class="inline-actions">
+          <button class="btn-outline">＋ Nueva área</button>
+          <button class="btn-outline">👤 Nuevo docente</button>
+          <button class="btn-outline">🔗 Asignar docente a clase</button>
+        </div>
+        <p class="hint">Catálogos listos.</p>
+        <table>
+          <thead><tr><th>Docente</th><th>Áreas</th></tr></thead>
+          <tbody>
+            <tr><td>MSc. María López</td><td>Ciencias Básicas</td></tr>
+            <tr><td>Ing. José Pérez</td><td>Tecnología</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <h3>🏫 Coordinaciones y carreras</h3>
+        <p class="hint">Registra coordinaciones y asocia sus carreras para que estén disponibles en filtros y matrícula.</p>
+        <div class="row-2">
+          <div>
+            <label>Nueva coordinación</label>
+            <input type="text" placeholder="Ej. Ingeniería">
+          </div>
+          <div class="align-end">
+            <button class="btn-dark full">Agregar coordinación</button>
+          </div>
+        </div>
+        <div class="row-2">
+          <div>
+            <label>Coordinación</label>
+            <select><option>Arquitectura</option></select>
+          </div>
+          <div>
+            <label>Nueva carrera</label>
+            <input type="text" placeholder="Ej. Ingeniería Industrial">
+          </div>
+        </div>
+        <div class="inline-actions">
+          <button class="btn-primary">Agregar carrera a coordinación</button>
+        </div>
+        <p class="hint">Sin cambios.</p>
+      </section>
+
+      <section class="panel">
+        <h3>🎓 Matrícula por periodo y carrera</h3>
+        <p class="hint">Configura estudiantes por carrera para el periodo activo. Esto se usa para crear grupos automáticos.</p>
+        <label>Carrera</label>
+        <select><option>Arquitectura</option></select>
+        <label>Estudiantes en periodo activo</label>
+        <input type="number" value="0">
+        <div class="inline-actions">
+          <button class="btn-primary">Guardar matrícula</button>
+        </div>
+      </section>
+    </div>
   </main>
 
   <footer class="bottom-tabs">
