@@ -38,10 +38,13 @@ const state = {
     Dominical: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Domingo', aula: '' },
   },
   matricula: {},
+  seleccionActual: { coordinacion: 'Arquitectura', carrera: 'Arquitectura', turno: 'Diurno' },
 };
 
 const getAllCarreras = () => Object.values(coordinaciones).flat();
 
+
+const turnosDisponibles = ['Diurno', 'Sabatino', 'Nocturno', 'Dominical'];
 
 const diasPorTurno = {
   Diurno: 'Lunes,Martes,Miércoles,Jueves,Viernes',
@@ -78,6 +81,29 @@ const syncCarreraSelects = () => {
     fillSelect(select, values, keepValue);
   });
 };
+
+const syncTurnoSelects = (selected = 'Diurno') => {
+  document.querySelectorAll('.js-turno').forEach((select) => {
+    const keepValue = turnosDisponibles.includes(select.value) ? select.value : selected;
+    fillSelect(select, turnosDisponibles, keepValue);
+  });
+};
+
+const applyDiasByTurnoToView = (turno) => {
+  const vistaBody = document.querySelector('#vista tbody');
+  if (!vistaBody) return;
+  const dia = (getDiasPorTurno(turno) || '').split(',')[0] || 'Día';
+  const encabezadoDia = document.querySelector('#vista thead th:last-child');
+  if (encabezadoDia) encabezadoDia.textContent = dia;
+};
+
+const updateSeleccionActual = () => {
+  const coordinacion = document.getElementById('carga-coordinacion')?.value || 'Arquitectura';
+  const carrera = document.getElementById('carga-carrera')?.value || getAllCarreras()[0] || 'Arquitectura';
+  const turno = document.getElementById('carga-turno')?.value || 'Diurno';
+  state.seleccionActual = { coordinacion, carrera, turno };
+};
+
 
 const setHint = (id, message, ok = true) => {
   const hint = document.getElementById(id);
@@ -141,6 +167,7 @@ importBtn?.addEventListener('click', () => {
 
     const coordinacion = document.getElementById('carga-coordinacion')?.value || 'Arquitectura';
     const carrera = document.getElementById('carga-carrera')?.value || 'Arquitectura';
+    const turno = document.getElementById('carga-turno')?.value || 'Diurno';
     const claseIdx = headers.indexOf('clase');
     const tipoIdx = headers.indexOf('tipo');
     const aulaIdx = headers.indexOf('aula');
@@ -152,6 +179,7 @@ importBtn?.addEventListener('click', () => {
       return {
         coordinacion,
         carrera,
+        turno,
         clase: cols[claseIdx] || 'Clase sin nombre',
         caracteristicas: ['csv', cols[tipoIdx] || 'aula'],
         docente: 'Por asignar',
@@ -167,6 +195,7 @@ importBtn?.addEventListener('click', () => {
     }
 
     state.clases.push(...importedValid);
+    updateSeleccionActual();
     renderCatalogoTabla();
     setHint('carga-hint', `Se importaron ${importedValid.length} clases desde CSV.`);
   };
@@ -187,15 +216,21 @@ addManualBtn?.addEventListener('click', () => {
     return;
   }
 
+  const coordinacion = document.getElementById('asignacion-coordinacion')?.value || 'Arquitectura';
+  const carrera = document.getElementById('carga-carrera')?.value || getAllCarreras()[0] || 'Arquitectura';
+  const turno = document.getElementById('asignacion-turno')?.value || 'Diurno';
+
   state.clases.push({
-    coordinacion: document.getElementById('asignacion-coordinacion')?.value || 'Arquitectura',
-    carrera: state.clases[0]?.carrera || 'Arquitectura',
+    coordinacion,
+    carrera,
+    turno,
     clase,
     caracteristicas: ['manual'],
     docente: 'Por asignar',
     area: 'Por asignar',
     aula: aula.trim(),
   });
+  updateSeleccionActual();
   renderCatalogoTabla();
   setHint('asignacion-hint', `Clase "${clase}" agregada correctamente.`);
 });
@@ -227,17 +262,37 @@ const vistaRows = document.querySelectorAll('#vista tbody tr td:last-child');
 
 const generateBtn = document.getElementById('btn-generar-auto');
 generateBtn?.addEventListener('click', () => {
+  const coordinacion = document.querySelector('#generacion .js-coordinacion')?.value || document.getElementById('carga-coordinacion')?.value;
   const carrera = document.getElementById('generacion-carrera')?.value;
-  const clasesCarrera = state.clases.filter((item) => item.carrera === carrera);
-  if (!clasesCarrera.length) {
-    consola.textContent = 'No hay clases para esa carrera. Carga CSV o agrega clases manualmente.';
+  const turno = document.getElementById('generacion-turno')?.value || 'Diurno';
+
+  const clasesSeleccion = state.clases.filter((item) => {
+    const matchCoord = item.coordinacion === coordinacion;
+    const matchCarrera = item.carrera === carrera;
+    const matchTurno = (item.turno || 'Diurno') === turno;
+    return matchCoord && matchCarrera && matchTurno;
+  });
+
+  if (!clasesSeleccion.length) {
+    consola.textContent = 'No hay clases para la configuración seleccionada. Carga CSV o agrega clases con la misma coordinación/carrera/turno.';
     return;
   }
+
+  const mismaConfiguracion = state.seleccionActual.coordinacion === coordinacion
+    && state.seleccionActual.carrera === carrera
+    && state.seleccionActual.turno === turno;
+
+  if (!mismaConfiguracion) {
+    consola.textContent = `La selección actual es ${state.seleccionActual.coordinacion} / ${state.seleccionActual.carrera} / ${state.seleccionActual.turno}. Ajusta la generación o vuelve a cargar clases para esta combinación.`;
+    return;
+  }
+
+  applyDiasByTurnoToView(turno);
   vistaRows.forEach((cell, index) => {
-    const clase = clasesCarrera[index];
+    const clase = clasesSeleccion[index];
     cell.textContent = clase ? `${clase.clase} (${clase.aula})` : '-';
   });
-  consola.textContent = `Horario generado para ${carrera} con ${Math.min(clasesCarrera.length, vistaRows.length)} bloques llenos.`;
+  consola.textContent = `Horario generado para ${coordinacion} / ${carrera} / ${turno} con ${Math.min(clasesSeleccion.length, vistaRows.length)} bloques llenos.`;
 });
 
 const resetBtn = document.getElementById('btn-reiniciar-demo');
@@ -398,6 +453,22 @@ document.getElementById('btn-guardar-matricula')?.addEventListener('click', () =
 
 syncCoordinacionSelects();
 syncCarreraSelects();
+syncTurnoSelects();
+updateSeleccionActual();
+applyDiasByTurnoToView(state.seleccionActual.turno);
 renderCatalogoTabla();
 renderDocentes();
 loadTurno();
+
+
+const linkSelectToConfig = (id, key) => {
+  const select = document.getElementById(id);
+  select?.addEventListener('change', () => {
+    state.seleccionActual[key] = select.value;
+    if (key === 'turno') applyDiasByTurnoToView(select.value);
+  });
+};
+
+linkSelectToConfig('carga-coordinacion', 'coordinacion');
+linkSelectToConfig('carga-carrera', 'carrera');
+linkSelectToConfig('carga-turno', 'turno');

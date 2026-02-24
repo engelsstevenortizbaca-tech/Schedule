@@ -42,7 +42,7 @@
           </div>
           <div>
             <label>Turno</label>
-            <select><option>Diurno</option></select>
+            <select id="carga-turno" class="js-turno"><option>Diurno</option></select>
           </div>
         </div>
 
@@ -69,7 +69,7 @@
         <h3>2) Asignación y cambios manuales</h3>
         <div class="row-2">
           <div><label>Coordinación</label><select id="asignacion-coordinacion" class="js-coordinacion"><option>Arquitectura</option></select></div>
-          <div><label>Turno</label><select><option>Diurno</option></select></div>
+          <div><label>Turno</label><select id="asignacion-turno" class="js-turno"><option>Diurno</option></select></div>
         </div>
         <div class="btn-row">
           <button id="btn-agregar-manual" class="btn-dark">Agregar clase manualmente</button>
@@ -84,7 +84,7 @@
         <div class="row-3">
           <div><label>Coordinación</label><select class="js-coordinacion"><option>Arquitectura</option></select></div>
           <div><label>Carrera</label><select id="generacion-carrera" class="js-carrera"><option>Arquitectura</option></select></div>
-          <div><label>Turno</label><select><option>Diurno</option></select></div>
+          <div><label>Turno</label><select id="generacion-turno" class="js-turno"><option>Diurno</option></select></div>
         </div>
         <div class="row-2">
           <button id="btn-generar-auto" class="btn-dark">Generar automáticamente</button>
@@ -98,7 +98,7 @@
         <div class="row-3">
           <div><label>Coordinación</label><select class="js-coordinacion"><option>Arquitectura</option></select></div>
           <div><label>Carrera</label><select class="js-carrera"><option>Arquitectura</option></select></div>
-          <div><label>Turno</label><select><option>Dominical</option></select></div>
+          <div><label>Turno</label><select id="vista-turno" class="js-turno"><option>Dominical</option></select></div>
         </div>
         <table>
           <thead><tr><th>Bloque</th><th>Domingo</th></tr></thead>
