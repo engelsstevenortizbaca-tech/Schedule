@@ -54,7 +54,12 @@ const diasPorTurno = {
   Dominical: 'Domingo',
 };
 
-const getDiasPorTurno = (turno) => diasPorTurno[turno] || diasPorTurno.Diurno;
+const normalizeTurno = (turno = '') => turno.toString().trim().toLowerCase();
+
+const getDiasPorTurno = (turno) => {
+  const turnoMatch = turnosDisponibles.find((item) => normalizeTurno(item) === normalizeTurno(turno)) || 'Diurno';
+  return state.turnoConfig[turnoMatch]?.dias || diasPorTurno[turnoMatch] || diasPorTurno.Diurno;
+};
 
 const fillSelect = (select, options, selectedValue) => {
   select.innerHTML = '';
@@ -102,9 +107,9 @@ const syncTurnoSelects = (selected = 'Diurno') => {
 const applyDiasByTurnoToView = (turno) => {
   const vistaBody = document.querySelector('#vista tbody');
   if (!vistaBody) return;
-  const dia = (getDiasPorTurno(turno) || '').split(',')[0] || 'Día';
+  const dias = getDiasPorTurno(turno) || 'Día';
   const encabezadoDia = document.querySelector('#vista thead th:last-child');
-  if (encabezadoDia) encabezadoDia.textContent = dia;
+  if (encabezadoDia) encabezadoDia.textContent = dias;
 };
 
 const updateSeleccionActual = () => {
@@ -496,6 +501,34 @@ renderDocentes();
 loadTurno();
 
 
+
+const linkVistaFiltersToSeleccion = () => {
+  const vistaPanel = document.getElementById('vista');
+  const vistaCoord = vistaPanel?.querySelector('.js-coordinacion');
+  const vistaCarrera = vistaPanel?.querySelector('.js-carrera');
+  const vistaTurno = document.getElementById('vista-turno');
+
+  vistaCoord?.addEventListener('change', (event) => {
+    const coordinacion = event.target.value;
+    state.seleccionActual.coordinacion = coordinacion;
+    const carreras = getCarrerasByCoordinacion(coordinacion);
+    if (carreras.length && !carreras.includes(state.seleccionActual.carrera)) {
+      state.seleccionActual.carrera = carreras[0];
+    }
+    syncAppFromSeleccionActual();
+  });
+
+  vistaCarrera?.addEventListener('change', (event) => {
+    state.seleccionActual.carrera = event.target.value;
+    syncAppFromSeleccionActual();
+  });
+
+  vistaTurno?.addEventListener('change', (event) => {
+    state.seleccionActual.turno = event.target.value;
+    syncAppFromSeleccionActual();
+  });
+};
+
 const linkSelectToConfig = (id, key) => {
   const select = document.getElementById(id);
   select?.addEventListener('change', () => {
@@ -515,6 +548,8 @@ const linkSelectToConfig = (id, key) => {
 linkSelectToConfig('carga-coordinacion', 'coordinacion');
 linkSelectToConfig('carga-carrera', 'carrera');
 linkSelectToConfig('carga-turno', 'turno');
+
+linkVistaFiltersToSeleccion();
 
 document.getElementById('coordinacion-config')?.addEventListener('change', (event) => {
   const value = event.target.value;
