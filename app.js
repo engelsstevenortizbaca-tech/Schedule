@@ -41,6 +41,7 @@ const state = {
   seleccionActual: { coordinacion: 'Arquitectura', carrera: 'Arquitectura', turno: 'Diurno' },
 };
 
+const getCarrerasByCoordinacion = (coordinacion) => coordinaciones[coordinacion] || [];
 const getAllCarreras = () => Object.values(coordinaciones).flat();
 
 
@@ -74,11 +75,20 @@ const syncCoordinacionSelects = (selected = 'Arquitectura') => {
   });
 };
 
+const getCoordinacionFromContext = (select) => {
+  const panel = select.closest('section') || select.closest('.view') || document;
+  const coordinacionSelect = panel.querySelector('.js-coordinacion');
+  return coordinacionSelect?.value || state.seleccionActual.coordinacion || Object.keys(coordinaciones)[0];
+};
+
 const syncCarreraSelects = () => {
-  const values = getAllCarreras();
+  const fallback = getAllCarreras();
   document.querySelectorAll('.js-carrera').forEach((select) => {
-    const keepValue = values.includes(select.value) ? select.value : values[0];
-    fillSelect(select, values, keepValue);
+    const coord = getCoordinacionFromContext(select);
+    const values = getCarrerasByCoordinacion(coord);
+    const options = values.length ? values : fallback;
+    const keepValue = options.includes(select.value) ? select.value : options[0];
+    fillSelect(select, options, keepValue);
   });
 };
 
@@ -102,6 +112,24 @@ const updateSeleccionActual = () => {
   const carrera = document.getElementById('carga-carrera')?.value || getAllCarreras()[0] || 'Arquitectura';
   const turno = document.getElementById('carga-turno')?.value || 'Diurno';
   state.seleccionActual = { coordinacion, carrera, turno };
+};
+
+const syncSelectValue = (selector, value) => {
+  document.querySelectorAll(selector).forEach((select) => {
+    if ([...select.options].some((option) => option.value === value)) {
+      select.value = value;
+    }
+  });
+};
+
+const syncAppFromSeleccionActual = () => {
+  syncCoordinacionSelects(state.seleccionActual.coordinacion);
+  syncTurnoSelects(state.seleccionActual.turno);
+  syncCarreraSelects();
+  syncSelectValue('.js-coordinacion', state.seleccionActual.coordinacion);
+  syncSelectValue('.js-turno', state.seleccionActual.turno);
+  syncSelectValue('.js-carrera', state.seleccionActual.carrera);
+  applyDiasByTurnoToView(state.seleccionActual.turno);
 };
 
 
@@ -341,7 +369,14 @@ document.getElementById('btn-guardar-turno')?.addEventListener('click', () => {
     dias: getDiasPorTurno(turno),
     aula: aulaInput.value.trim(),
   };
+
+  state.clases = state.clases.map((item) => {
+    if ((item.turno || 'Diurno') !== turno || item.aula) return item;
+    return { ...item, aula };
+  });
+
   diasInput.value = getDiasPorTurno(turno);
+  renderCatalogoTabla();
   setHint('turno-hint', `Configuración de ${turno} guardada con días: ${state.turnoConfig[turno].dias} y aula: ${state.turnoConfig[turno].aula}.`);
 });
 
@@ -455,7 +490,7 @@ syncCoordinacionSelects();
 syncCarreraSelects();
 syncTurnoSelects();
 updateSeleccionActual();
-applyDiasByTurnoToView(state.seleccionActual.turno);
+syncAppFromSeleccionActual();
 renderCatalogoTabla();
 renderDocentes();
 loadTurno();
@@ -465,10 +500,38 @@ const linkSelectToConfig = (id, key) => {
   const select = document.getElementById(id);
   select?.addEventListener('change', () => {
     state.seleccionActual[key] = select.value;
-    if (key === 'turno') applyDiasByTurnoToView(select.value);
+
+    if (key === 'coordinacion') {
+      const carreras = getCarrerasByCoordinacion(select.value);
+      if (carreras.length && !carreras.includes(state.seleccionActual.carrera)) {
+        state.seleccionActual.carrera = carreras[0];
+      }
+    }
+
+    syncAppFromSeleccionActual();
   });
 };
 
 linkSelectToConfig('carga-coordinacion', 'coordinacion');
 linkSelectToConfig('carga-carrera', 'carrera');
 linkSelectToConfig('carga-turno', 'turno');
+
+document.getElementById('coordinacion-config')?.addEventListener('change', (event) => {
+  const value = event.target.value;
+  state.seleccionActual.coordinacion = value;
+  const carreras = getCarrerasByCoordinacion(value);
+  if (carreras.length) {
+    state.seleccionActual.carrera = carreras[0];
+  }
+  syncAppFromSeleccionActual();
+});
+
+document.getElementById('turno-config-select')?.addEventListener('change', (event) => {
+  state.seleccionActual.turno = event.target.value;
+  syncAppFromSeleccionActual();
+});
+
+document.getElementById('matricula-carrera')?.addEventListener('change', (event) => {
+  state.seleccionActual.carrera = event.target.value;
+  syncAppFromSeleccionActual();
+});
