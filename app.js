@@ -33,6 +33,7 @@ const state = {
   areas: ['Ciencias Básicas', 'Tecnología'],
   turnoConfig: {
     Diurno: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes' },
+    Sabatino: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Sábado' },
     Nocturno: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes' },
     Dominical: { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Domingo' },
   },
@@ -40,6 +41,16 @@ const state = {
 };
 
 const getAllCarreras = () => Object.values(coordinaciones).flat();
+
+
+const diasPorTurno = {
+  Diurno: 'Lunes,Martes,Miércoles,Jueves,Viernes',
+  Sabatino: 'Sábado',
+  Nocturno: 'Lunes,Martes,Miércoles,Jueves,Viernes',
+  Dominical: 'Domingo',
+};
+
+const getDiasPorTurno = (turno) => diasPorTurno[turno] || diasPorTurno.Diurno;
 
 const fillSelect = (select, options, selectedValue) => {
   select.innerHTML = '';
@@ -232,10 +243,13 @@ const loadTurno = () => {
   duracionInput.value = cfg.duracion;
   creditosInput.value = cfg.creditos;
   maxTurnosInput.value = cfg.maxTurnos;
-  diasInput.value = cfg.dias;
+  diasInput.value = cfg.dias || getDiasPorTurno(turno);
 };
 
-turnoSelect?.addEventListener('change', loadTurno);
+turnoSelect?.addEventListener('change', () => {
+  loadTurno();
+  diasInput.value = getDiasPorTurno(turnoSelect.value);
+});
 
 document.getElementById('btn-guardar-turno')?.addEventListener('click', () => {
   const turno = turnoSelect.value;
@@ -243,16 +257,20 @@ document.getElementById('btn-guardar-turno')?.addEventListener('click', () => {
     duracion: Number(duracionInput.value || 45),
     creditos: Number(creditosInput.value || 1),
     maxTurnos: Number(maxTurnosInput.value || 4),
-    dias: diasInput.value.trim(),
+    dias: getDiasPorTurno(turno),
   };
-  setHint('turno-hint', `Configuración de ${turno} guardada.`);
+  diasInput.value = getDiasPorTurno(turno);
+  setHint('turno-hint', `Configuración de ${turno} guardada con días: ${state.turnoConfig[turno].dias}.`);
 });
 
 document.getElementById('btn-restablecer-turno')?.addEventListener('click', () => {
-  state.turnoConfig[turnoSelect.value] = { duracion: 45, creditos: 1, maxTurnos: 4, dias: 'Lunes,Martes,Miércoles,Jueves,Viernes' };
-  if (turnoSelect.value === 'Dominical') {
-    state.turnoConfig.Dominical.dias = 'Domingo';
-  }
+  const turno = turnoSelect.value;
+  state.turnoConfig[turno] = {
+    duracion: 45,
+    creditos: 1,
+    maxTurnos: 4,
+    dias: getDiasPorTurno(turno),
+  };
   loadTurno();
   setHint('turno-hint', 'Valores restablecidos por defecto.');
 });
