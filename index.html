@@ -34,11 +34,11 @@
         <div class="row-3">
           <div>
             <label>Coordinación</label>
-            <select><option>Arquitectura</option></select>
+            <select class="js-coordinacion"><option>Arquitectura</option></select>
           </div>
           <div>
             <label>Carrera</label>
-            <select><option>Diseño Gráfico</option></select>
+            <select class="js-carrera"><option>Diseño Gráfico</option></select>
           </div>
           <div>
             <label>Turno</label>
@@ -68,7 +68,7 @@
       <section class="panel" id="asignacion">
         <h3>2) Asignación y cambios manuales</h3>
         <div class="row-2">
-          <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
+          <div><label>Coordinación</label><select class="js-coordinacion"><option>Arquitectura</option></select></div>
           <div><label>Turno</label><select><option>Diurno</option></select></div>
         </div>
         <div class="btn-row">
@@ -82,8 +82,8 @@
         <h3>3) Generación automática por carrera</h3>
         <p class="hint">Genera horario únicamente para la coordinación/carrera/turno seleccionadas en la carga CSV.</p>
         <div class="row-3">
-          <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
-          <div><label>Carrera</label><select><option>Arquitectura</option></select></div>
+          <div><label>Coordinación</label><select class="js-coordinacion"><option>Arquitectura</option></select></div>
+          <div><label>Carrera</label><select class="js-carrera"><option>Arquitectura</option></select></div>
           <div><label>Turno</label><select><option>Diurno</option></select></div>
         </div>
         <div class="row-2">
@@ -96,8 +96,8 @@
       <section class="panel" id="vista">
         <h3>4) Vista por coordinación / carrera / turno</h3>
         <div class="row-3">
-          <div><label>Coordinación</label><select><option>Arquitectura</option></select></div>
-          <div><label>Carrera</label><select><option>Arquitectura</option></select></div>
+          <div><label>Coordinación</label><select class="js-coordinacion"><option>Arquitectura</option></select></div>
+          <div><label>Carrera</label><select class="js-carrera"><option>Arquitectura</option></select></div>
           <div><label>Turno</label><select><option>Dominical</option></select></div>
         </div>
         <table>
@@ -188,33 +188,33 @@
         <div class="row-2">
           <div>
             <label>Nueva coordinación</label>
-            <input type="text" placeholder="Ej. Ingeniería">
+            <input id="nueva-coordinacion" type="text" placeholder="Ej. Ingeniería">
           </div>
           <div class="align-end">
-            <button class="btn-dark full">Agregar coordinación</button>
+            <button id="btn-agregar-coordinacion" class="btn-dark full">Agregar coordinación</button>
           </div>
         </div>
         <div class="row-2">
           <div>
             <label>Coordinación</label>
-            <select><option>Arquitectura</option></select>
+            <select id="coordinacion-config" class="js-coordinacion"><option>Arquitectura</option></select>
           </div>
           <div>
             <label>Nueva carrera</label>
-            <input type="text" placeholder="Ej. Ingeniería Industrial">
+            <input id="nueva-carrera" type="text" placeholder="Ej. Ingeniería Industrial">
           </div>
         </div>
         <div class="inline-actions">
-          <button class="btn-primary">Agregar carrera a coordinación</button>
+          <button id="btn-agregar-carrera" class="btn-primary">Agregar carrera a coordinación</button>
         </div>
-        <p class="hint">Sin cambios.</p>
+        <p class="hint" id="catalogo-hint">Sin cambios.</p>
       </section>
 
       <section class="panel">
         <h3>🎓 Matrícula por periodo y carrera</h3>
         <p class="hint">Configura estudiantes por carrera para el periodo activo. Esto se usa para crear grupos automáticos.</p>
         <label>Carrera</label>
-        <select><option>Arquitectura</option></select>
+        <select class="js-carrera"><option>Arquitectura</option></select>
         <label>Estudiantes en periodo activo</label>
         <input type="number" value="0">
         <div class="inline-actions">
