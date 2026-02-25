@@ -901,11 +901,29 @@ const parseCsvRows = (text) => {
   if (lines.length < 2) return { ok: false, message: 'El CSV no contiene datos válidos.' };
 
   const headers = lines[0].split(',').map((item) => item.trim().toLowerCase());
-  const required = ['clase', 'creditos', 'compartida', 'anio', 'categoria', 'tipo', 'aula'];
+  const required = ['clase', 'creditos', 'compartida', 'anio', 'categoria', 'tipo', 'aula', 'docente'];
+  const allowed = [...required, 'prioridad_dia', 'prioridad_dias'];
   const missing = required.filter((field) => !headers.includes(field));
   if (missing.length) return { ok: false, message: `Faltan columnas: ${missing.join(', ')}` };
 
+  const invalidColumns = headers.filter((field) => !allowed.includes(field));
+  if (invalidColumns.length) {
+    return { ok: false, message: `Columnas incorrectas detectadas: ${invalidColumns.join(', ')}` };
+  }
+
   return { ok: true, headers, rows: lines.slice(1) };
+};
+
+const getClassIdentityKey = (item = {}) => [
+  normalizeText(item.coordinacion),
+  normalizeText(item.carrera),
+  normalizeText(resolveTurnoName(item.turno || 'Diurno')),
+  normalizeText(item.clase),
+].join('::');
+
+const isAssignedValue = (value) => {
+  const normalized = normalizeText(value);
+  return normalized && normalized !== 'por asignar' && normalized !== '-';
 };
 
 const createClassFromCsvRow = (row, headers, context) => {
@@ -913,12 +931,20 @@ const createClassFromCsvRow = (row, headers, context) => {
   const claseIdx = headers.indexOf('clase');
   const tipoIdx = headers.indexOf('tipo');
   const aulaIdx = headers.indexOf('aula');
+  const docenteIdx = headers.indexOf('docente');
   const creditosIdx = headers.indexOf('creditos');
   const prioridadDiaIdx = headers.indexOf('prioridad_dia');
   const prioridadDiasIdx = headers.indexOf('prioridad_dias');
 
-  const aula = cols[aulaIdx];
-  if (!aula) return null;
+  const aula = safeString(cols[aulaIdx]).trim();
+  const docente = safeString(cols[docenteIdx]).trim();
+
+  if (!aula || !docente) {
+    return {
+      ok: false,
+      reason: 'Aula y docente son obligatorios.',
+    };
+  }
 
   const prioridadRaw = cols[prioridadDiasIdx] || cols[prioridadDiaIdx] || '';
   const prioridadDias = safeString(prioridadRaw)
@@ -928,18 +954,111 @@ const createClassFromCsvRow = (row, headers, context) => {
     .map((value) => value.trim())
     .filter(Boolean);
 
+  const tipoClase = safeString(cols[tipoIdx]).trim() || 'aula';
+
   return {
-    coordinacion: context.coordinacion,
-    carrera: context.carrera,
-    turno: context.turno,
-    clase: cols[claseIdx] || 'Clase sin nombre',
-    creditos: toPositiveNumber(cols[creditosIdx], getTurnoConfig(context.turno).creditos || 1),
-    prioridadDias,
-    caracteristicas: ['csv', cols[tipoIdx] || 'aula'],
-    docente: 'Por asignar',
-    area: 'Por asignar',
-    aula,
+    ok: true,
+    item: {
+      coordinacion: context.coordinacion,
+      carrera: context.carrera,
+      turno: context.turno,
+      clase: cols[claseIdx] || 'Clase sin nombre',
+      creditos: toPositiveNumber(cols[creditosIdx], getTurnoConfig(context.turno).creditos || 1),
+      tipoClase,
+      prioridadDias,
+      caracteristicas: ['csv', tipoClase],
+      docente,
+      area: 'Por asignar',
+      aula,
+    },
   };
+};
+
+const askImportMode = (existingCount, incomingCount) => {
+  const answer = window.prompt(
+    `Se importarán ${incomingCount} clases y ya existen ${existingCount} para esta selección. Escribe "sobreescribir" para reemplazar, "fusionar" para combinar o "cancelar".`,
+    'fusionar',
+  );
+
+  const mode = normalizeText(answer);
+  if (!mode || mode === 'cancelar') return null;
+  if (mode === 'sobreescribir') return 'overwrite';
+  if (mode === 'fusionar') return 'merge';
+
+  window.alert('Opción no válida. Importación cancelada.');
+  return null;
+};
+
+const applyImportedClasses = (importedClasses, context, mode) => {
+  if (mode === 'overwrite') {
+    state.clases = safeArray(state.clases).filter((item) => !(
+      normalizeText(item.coordinacion) === normalizeText(context.coordinacion)
+      && normalizeText(item.carrera) === normalizeText(context.carrera)
+      && normalizeText(resolveTurnoName(item.turno || 'Diurno')) === normalizeText(context.turno)
+    ));
+    state.clases.push(...importedClasses);
+    return { importedCount: importedClasses.length, updatedCount: 0 };
+  }
+
+  let importedCount = 0;
+  let updatedCount = 0;
+
+  importedClasses.forEach((incoming) => {
+    const existing = safeArray(state.clases).find((item) => getClassIdentityKey(item) === getClassIdentityKey(incoming));
+    if (!existing) {
+      state.clases.push(incoming);
+      importedCount += 1;
+      return;
+    }
+
+    if (isAssignedValue(existing.aula) && normalizeText(existing.aula) !== normalizeText(incoming.aula)) {
+      const ok = window.confirm(`La clase "${existing.clase}" ya tiene aula asignada (${existing.aula}). ¿Deseas cambiarla por "${incoming.aula}"?`);
+      if (!ok) incoming.aula = existing.aula;
+    }
+
+    if (isAssignedValue(existing.docente) && normalizeText(existing.docente) !== normalizeText(incoming.docente)) {
+      const ok = window.confirm(`La clase "${existing.clase}" ya tiene docente asignado (${existing.docente}). ¿Deseas cambiarlo por "${incoming.docente}"?`);
+      if (!ok) incoming.docente = existing.docente;
+    }
+
+    Object.assign(existing, incoming, {
+      aula: incoming.aula,
+      docente: incoming.docente,
+    });
+    updatedCount += 1;
+  });
+
+  return { importedCount, updatedCount };
+};
+
+const upsertManualClass = (incoming) => {
+  const existing = safeArray(state.clases).find((item) => getClassIdentityKey(item) === getClassIdentityKey(incoming));
+  if (!existing) {
+    state.clases.push(incoming);
+    return { created: true, updated: false };
+  }
+
+  const replaceExisting = window.confirm(`La clase "${existing.clase}" ya existe para esta coordinación/carrera/turno. ¿Deseas reemplazar sus datos?`);
+  if (!replaceExisting) return { created: false, updated: false, cancelled: true };
+
+  let nextAula = incoming.aula;
+  let nextDocente = incoming.docente;
+
+  if (isAssignedValue(existing.aula) && normalizeText(existing.aula) !== normalizeText(incoming.aula)) {
+    const confirmAula = window.confirm(`La clase "${existing.clase}" ya tiene aula asignada (${existing.aula}). ¿Deseas cambiarla por "${incoming.aula}"?`);
+    if (!confirmAula) nextAula = existing.aula;
+  }
+
+  if (isAssignedValue(existing.docente) && normalizeText(existing.docente) !== normalizeText(incoming.docente)) {
+    const confirmDocente = window.confirm(`La clase "${existing.clase}" ya tiene docente asignado (${existing.docente}). ¿Deseas cambiarlo por "${incoming.docente}"?`);
+    if (!confirmDocente) nextDocente = existing.docente;
+  }
+
+  Object.assign(existing, incoming, {
+    aula: nextAula,
+    docente: nextDocente,
+  });
+  return { created: false, updated: true };
 };
 
 const processCsvImport = (file, context) => {
@@ -951,19 +1070,47 @@ const processCsvImport = (file, context) => {
       return;
     }
 
-    const importedValid = parsed.rows
-      .map((line) => createClassFromCsvRow(line, parsed.headers, context))
-      .filter(Boolean);
+    const parsedRows = parsed.rows
+      .map((line, index) => ({ ...createClassFromCsvRow(line, parsed.headers, context), rowNumber: index + 2 }));
+
+    const invalidRows = parsedRows.filter((item) => !item.ok);
+    const importedValid = parsedRows
+      .filter((item) => item.ok)
+      .map((item) => item.item);
 
     if (!importedValid.length) {
-      setHint('carga-hint', 'No se importó ninguna clase porque falta el aula en las filas del CSV.', false);
+      setHint('carga-hint', 'No se importó ninguna clase. Verifica que cada fila tenga aula y docente.', false);
       return;
     }
 
-    state.clases.push(...importedValid);
+    if (invalidRows.length) {
+      const rowsText = invalidRows.map((item) => item.rowNumber).join(', ');
+      const shouldContinue = window.confirm(`Se detectaron filas inválidas (${rowsText}) por aula/docente vacío. ¿Deseas continuar importando las filas válidas?`);
+      if (!shouldContinue) {
+        setHint('carga-hint', 'Importación cancelada por filas inválidas.', false);
+        return;
+      }
+    }
+
+    const existingForContext = safeArray(state.clases).filter((item) => (
+      normalizeText(item.coordinacion) === normalizeText(context.coordinacion)
+      && normalizeText(item.carrera) === normalizeText(context.carrera)
+      && normalizeText(resolveTurnoName(item.turno || 'Diurno')) === normalizeText(context.turno)
+    ));
+
+    let mode = 'merge';
+    if (existingForContext.length) {
+      mode = askImportMode(existingForContext.length, importedValid.length);
+      if (!mode) {
+        setHint('carga-hint', 'Importación cancelada por el usuario.', false);
+        return;
+      }
+    }
+
+    const result = applyImportedClasses(importedValid, context, mode);
     updateSeleccionActual();
     renderCatalogoTabla();
-    setHint('carga-hint', `Se importaron ${importedValid.length} clases desde CSV.`);
+    setHint('carga-hint', `CSV importado. Nuevas: ${result.importedCount}. Actualizadas: ${result.updatedCount}.`);
   };
 
   reader.readAsText(file);
@@ -1222,20 +1369,41 @@ const bindEvents = () => {
       return;
     }
 
-    state.clases.push({
+    const docente = window.prompt('Docente de la clase:');
+    if (!docente || !docente.trim()) {
+      setHint('asignacion-hint', 'Debes indicar el docente de la clase.', false);
+      return;
+    }
+
+    const creditosInput = window.prompt('Créditos de la clase:', '1');
+    const tipoClase = safeString(window.prompt('Tipo de clase (ejemplo: aula, laboratorio, taller):', 'aula')).trim() || 'aula';
+
+    const item = {
       coordinacion: getSelectValue('asignacion-coordinacion', 'Arquitectura'),
       carrera: getSelectValue('carga-carrera', getAllCarreras()[0] || 'Arquitectura'),
       turno: resolveTurnoName(getSelectValue('asignacion-turno', 'Diurno')),
-      clase,
-      caracteristicas: ['manual'],
-      docente: 'Por asignar',
+      clase: clase.trim(),
+      creditos: toPositiveNumber(creditosInput, 1),
+      tipoClase,
+      caracteristicas: ['manual', tipoClase],
+      docente: docente.trim(),
       area: 'Por asignar',
       aula: aula.trim(),
-    });
+    };
+
+    const result = upsertManualClass(item);
+    if (result.cancelled) {
+      setHint('asignacion-hint', 'No se realizaron cambios en la clase existente.', false);
+      return;
+    }
 
     updateSeleccionActual();
     renderCatalogoTabla();
-    setHint('asignacion-hint', `Clase "${clase}" agregada correctamente.`);
+    if (result.updated) {
+      setHint('asignacion-hint', `Clase "${item.clase}" actualizada correctamente.`);
+      return;
+    }
+    setHint('asignacion-hint', `Clase "${item.clase}" agregada correctamente.`);
   });
 
   $id('btn-cambiar-clase')?.addEventListener('click', () => {
