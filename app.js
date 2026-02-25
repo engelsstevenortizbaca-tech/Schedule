@@ -35,7 +35,8 @@ const getDefaultTurnoConfig = (turno) => {
   const horaInicio = DEFAULT_HORA_INICIO;
   const horaFin = DEFAULT_HORA_FIN;
   const duracion = 45;
-  const bloquesRango = 11;
+  const minutosDisponibles = Math.max(parseTimeToMinutes(horaFin) - parseTimeToMinutes(horaInicio), 0);
+  const bloquesRango = Math.max(Math.floor(minutosDisponibles / duracion), 1);
 
   return {
     horaInicio,
@@ -375,7 +376,7 @@ const getBloquesMinimosParaVista = (turno, cfg) => {
   const duracion = Math.max(toPositiveNumber(cfg.duracion, 45), 1);
   if (inicio >= endMinutes) return 1;
 
-  return Math.max(Math.ceil((endMinutes - inicio) / duracion), 1);
+  return Math.max(Math.floor((endMinutes - inicio) / duracion), 1);
 };
 
 const getBloqueRestriction = (start, end, cfg) => {
@@ -396,7 +397,9 @@ const getBloqueRestriction = (start, end, cfg) => {
 const getBloquesVista = (turno) => {
   const cfg = getTurnoConfig(turno);
   const minBloquesParaVista = getBloquesMinimosParaVista(turno, cfg);
-  const totalBloques = Math.max(toPositiveNumber(cfg.maxTurnos, 4), minBloquesParaVista);
+  const defaultCfg = getDefaultTurnoConfig(turno);
+  const totalBloquesConfigurados = toPositiveNumber(cfg.maxTurnos, defaultCfg.maxTurnos);
+  const totalBloques = Math.max(totalBloquesConfigurados, minBloquesParaVista);
   const duracion = Math.max(toPositiveNumber(cfg.duracion, 45), 1);
   const inicio = parseTimeToMinutes(cfg.horaInicio || '08:00');
 
