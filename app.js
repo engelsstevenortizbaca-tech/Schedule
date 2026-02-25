@@ -755,7 +755,22 @@ const bloquesNecesariosPorClase = (clase, turno = 'Diurno') => {
   return Math.max(Math.ceil(creditos), 1);
 };
 
-const encontrarHuecoContiguo = (slotsDisponibles, bloquesNecesarios) => {
+const esDiurno = (turno) => resolveTurnoName(turno) === 'Diurno';
+
+const esTurnoFinDeSemana = (turno) => {
+  const turnoNormalizado = resolveTurnoName(turno);
+  return turnoNormalizado === 'Sabatino' || turnoNormalizado === 'Dominical';
+};
+
+const parseHoraRange = (horaRange = '') => {
+  const [inicioRaw = '', finRaw = ''] = safeString(horaRange).split('-');
+  return {
+    inicio: parseTimeToMinutes(inicioRaw.trim()),
+    fin: parseTimeToMinutes(finRaw.trim()),
+  };
+};
+
+const obtenerTramosContiguos = (slotsDisponibles = [], bloquesNecesarios = 1) => {
   const requeridos = Math.max(Number(bloquesNecesarios) || 1, 1);
   const disponibles = safeArray(slotsDisponibles)
     .filter((item) => item && Number.isInteger(item.blockIndex) && Number.isInteger(item.slotIndex))
@@ -763,16 +778,48 @@ const encontrarHuecoContiguo = (slotsDisponibles, bloquesNecesarios) => {
 
   if (disponibles.length < requeridos) return [];
 
+  const tramos = [];
   for (let start = 0; start <= (disponibles.length - requeridos); start += 1) {
     const tramo = disponibles.slice(start, start + requeridos);
     const consecutivos = tramo.every((item, index) => index === 0 || item.blockIndex === (tramo[index - 1].blockIndex + 1));
-    if (consecutivos) return tramo;
+    if (consecutivos) tramos.push(tramo);
   }
 
-  return [];
+  return tramos;
 };
 
-const asignarClaseEnSlots = (clase, slots = []) => {
+const seleccionarSlotsParaClase = (turno, slotsDisponibles, bloquesNecesarios) => {
+  const tramosContiguos = obtenerTramosContiguos(slotsDisponibles, bloquesNecesarios);
+  if (!tramosContiguos.length) return [];
+
+  if (esTurnoFinDeSemana(turno)) {
+    return tramosContiguos[0];
+  }
+
+  if (esDiurno(turno)) {
+    const bloquesDia = safeArray(slotsDisponibles)
+      .map((item) => item.blockIndex)
+      .filter((item) => Number.isInteger(item));
+    const minBlock = bloquesDia.length ? Math.min(...bloquesDia) : 0;
+    const maxBlock = bloquesDia.length ? Math.max(...bloquesDia) : 0;
+    const centroDia = (minBlock + maxBlock) / 2;
+
+    return tramosContiguos
+      .slice()
+      .sort((a, b) => {
+        const centroA = (a[0].blockIndex + a[a.length - 1].blockIndex) / 2;
+        const centroB = (b[0].blockIndex + b[b.length - 1].blockIndex) / 2;
+        const distanciaA = Math.abs(centroA - centroDia);
+        const distanciaB = Math.abs(centroB - centroDia);
+        if (distanciaA !== distanciaB) return distanciaB - distanciaA;
+        return a[0].blockIndex - b[0].blockIndex;
+      })[0];
+  }
+
+  return tramosContiguos[0];
+};
+
+const asignarClase = (clase, slots = []) => {
   const nombreClase = safeString(clase?.clase).trim() || '-';
   const aula = safeString(clase?.aula).trim() || '-';
   const docente = safeString(clase?.docente).trim() || 'Por asignar';
@@ -852,8 +899,13 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
     for (let dayIndex = 0; dayIndex < diasCount; dayIndex += 1) {
       const slotIndex = getSlotFromDayAndBlock({ dayIndex, blockIndex, diasCount });
       const bloque = bloques[blockIndex];
-      if (bloque.restriccion) {
-        slots[slotIndex] = { clase: bloque.restriccion, aula: '-', docente: '', restriccion: bloque.restriccion };
+      const { inicio, fin } = parseHoraRange(bloque.hora);
+      const fueraDeRangoDiurno = esDiurno(turno) && (inicio < (8 * 60) || fin > (16 * 60));
+      const restriccionDiurno = fueraDeRangoDiurno ? 'FUERA DE RANGO DIURNO' : '';
+      const restriccionActiva = bloque.restriccion || restriccionDiurno;
+
+      if (restriccionActiva) {
+        slots[slotIndex] = { clase: restriccionActiva, aula: '-', docente: '', restriccion: restriccionActiva };
         bloquesRestringidos += 1;
         continue;
       }
@@ -895,7 +947,7 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
         slotsDia.push({ slotIndex, blockIndex });
       }
 
-      const huecoContiguo = encontrarHuecoContiguo(slotsDia, bloquesNecesarios);
+      const huecoContiguo = seleccionarSlotsParaClase(turno, slotsDia, bloquesNecesarios);
       if (!huecoContiguo.length) {
         ultimoMotivoRegla = `No hay ${bloquesNecesarios} bloques contiguos disponibles en el mismo día.`;
         continue;
@@ -940,11 +992,15 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
 
     const slotsObjetivo = slotsAsignables.map((slotIndex) => slots[slotIndex]);
     candidate.aula = candidate.aula || defaultAula;
-    asignarClaseEnSlots(candidate, slotsObjetivo);
+    asignarClase(candidate, slotsObjetivo);
     slotsAsignables.forEach((slotIndex) => marcarOcupacion(candidate, slotIndex, ocupacionPorSlot));
 
     if (diaAsignado >= 0) clasesPorDia[diaAsignado] = (clasesPorDia[diaAsignado] || 0) + 1;
   });
+
+  if (clasesNoAsignadas.length) {
+    console.warn('Clases no asignadas para el turno', turno, clasesNoAsignadas);
+  }
 
   const clasesAsignadas = clasesEnOrden.length - clasesEnConflicto.length;
   return { slots, clasesAsignadas, bloquesRestringidos, clasesEnConflicto, clasesNoAsignadas };
