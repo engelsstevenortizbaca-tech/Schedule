@@ -2,6 +2,7 @@ const $id = (id) => document.getElementById(id);
 
 const safeArray = (value) => (Array.isArray(value) ? value : []);
 const safeString = (value, fallback = '') => (value == null ? fallback : String(value));
+const normalizeText = (value) => safeString(value).trim().toLowerCase();
 const toPositiveNumber = (value, fallback) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -31,6 +32,7 @@ const getDefaultTurnoConfig = (turno) => ({
   creditos: 1,
   maxTurnos: 4,
   dias: diasPorTurno[turno] || diasPorTurno.Diurno,
+  prioridadDias: safeString(diasPorTurno[turno] || diasPorTurno.Diurno).split(',').map((dia) => dia.trim()).filter(Boolean),
   aula: '',
   recesoInicio: '',
   recesoFin: '',
@@ -165,6 +167,70 @@ const getDiasArray = (turno) => safeString(getDiasPorTurno(turno), 'Día')
   .split(',')
   .map((dia) => dia.trim())
   .filter(Boolean);
+
+const getPrioridadDias = (turno, dias = []) => {
+  const safeDias = safeArray(dias).map((dia) => safeString(dia).trim()).filter(Boolean);
+  const cfg = getTurnoConfig(turno);
+
+  const prioridadRaw = Array.isArray(cfg.prioridadDias)
+    ? cfg.prioridadDias
+    : safeString(cfg.prioridadDias).split(',');
+
+  const prioridadFiltrada = prioridadRaw
+    .map((dia) => safeString(dia).trim())
+    .filter((dia) => dia && safeDias.some((item) => normalizeText(item) === normalizeText(dia)));
+
+  const prioridadUnica = [];
+  prioridadFiltrada.forEach((dia) => {
+    const existente = prioridadUnica.some((item) => normalizeText(item) === normalizeText(dia));
+    if (!existente) prioridadUnica.push(dia);
+  });
+
+  safeDias.forEach((dia) => {
+    const yaIncluido = prioridadUnica.some((item) => normalizeText(item) === normalizeText(dia));
+    if (!yaIncluido) prioridadUnica.push(dia);
+  });
+
+  return prioridadUnica;
+};
+
+const getDayPriorityIndexes = (turno, dias = []) => {
+  const safeDias = safeArray(dias);
+  const prioridadDias = getPrioridadDias(turno, safeDias);
+  const indexes = prioridadDias
+    .map((dia) => safeDias.findIndex((item) => normalizeText(item) === normalizeText(dia)))
+    .filter((index) => Number.isInteger(index) && index >= 0);
+
+  safeDias.forEach((_, index) => {
+    if (!indexes.includes(index)) indexes.push(index);
+  });
+
+  return indexes;
+};
+
+const getSlotIterationOrder = ({ totalSlots, diasCount, bloquesCount, dayPriorityIndexes }) => {
+  if (!Number.isInteger(totalSlots) || totalSlots <= 0) return [];
+
+  const safeDiasCount = Number.isInteger(diasCount) && diasCount > 0 ? diasCount : 1;
+  const safeBloquesCount = Number.isInteger(bloquesCount) && bloquesCount > 0
+    ? bloquesCount
+    : Math.ceil(totalSlots / safeDiasCount);
+
+  const safeDayPriorityIndexes = safeArray(dayPriorityIndexes).filter((index) => Number.isInteger(index) && index >= 0 && index < safeDiasCount);
+  const dayOrder = safeDayPriorityIndexes.length
+    ? safeDayPriorityIndexes
+    : Array.from({ length: safeDiasCount }, (_, index) => index);
+
+  const orderedSlots = [];
+  for (let blockIndex = 0; blockIndex < safeBloquesCount; blockIndex += 1) {
+    dayOrder.forEach((dayIndex) => {
+      const slotIndex = (blockIndex * safeDiasCount) + dayIndex;
+      if (slotIndex < totalSlots) orderedSlots.push(slotIndex);
+    });
+  }
+
+  return orderedSlots;
+};
 
 const formatTimeFromMinutes = (minutes) => {
   const normalized = ((Number(minutes) || 0) % (24 * 60) + (24 * 60)) % (24 * 60);
@@ -311,11 +377,22 @@ const pintarClasesEnVista = (slots = []) => {
 };
 
 const filtrarClasesPorSeleccion = ({ coordinacion, carrera, turno }) => safeArray(state.clases).filter((item) => {
-  const matchCoord = item.coordinacion === coordinacion;
-  const matchCarrera = item.carrera === carrera;
+  const matchCoord = normalizeText(item.coordinacion) === normalizeText(coordinacion);
+  const matchCarrera = normalizeText(item.carrera) === normalizeText(carrera);
   const matchTurno = resolveTurnoName(item.turno || 'Diurno') === resolveTurnoName(turno);
   return matchCoord && matchCarrera && matchTurno;
 });
+
+const getPrimeraSeleccionConClases = () => {
+  const first = safeArray(state.clases).find((item) => item && item.coordinacion && item.carrera);
+  if (!first) return null;
+
+  return {
+    coordinacion: first.coordinacion,
+    carrera: first.carrera,
+    turno: resolveTurnoName(first.turno || state.seleccionActual.turno || 'Diurno'),
+  };
+};
 
 const validateSelectedConfig = ({ coordinacion, carrera, turno }) => {
   const same = state.seleccionActual.coordinacion === coordinacion
@@ -428,23 +505,27 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
   const maxClasesPorDia = Math.max(toPositiveNumber(getTurnoConfig(turno).maxTurnos, 4), 1);
   const ocupacionPorSlot = buildOcupacionPorSlot(totalSlots);
   const clasesPorDia = Array.from({ length: diasCount }, () => 0);
+  const dayPriorityIndexes = getDayPriorityIndexes(turno, dias);
+  const slotOrder = getSlotIterationOrder({
+    totalSlots,
+    diasCount,
+    bloquesCount: bloques.length,
+    dayPriorityIndexes,
+  });
 
   const clasesPendientes = safeArray(clases).map((_, index) => index);
   let bloquesRestringidos = 0;
-  const slots = [];
+  const slots = Array.from({ length: totalSlots }, () => ({ clase: '-', aula: '-', restriccion: '' }));
 
-  for (let slotIndex = 0; slotIndex < totalSlots; slotIndex += 1) {
+  slotOrder.forEach((slotIndex) => {
     const blockIndex = Math.floor(slotIndex / diasCount);
-    if (blockIndex < 0 || blockIndex >= bloques.length) {
-      slots.push({ clase: '-', aula: '-', restriccion: '' });
-      continue;
-    }
+    if (blockIndex < 0 || blockIndex >= bloques.length) return;
 
     const bloque = bloques[blockIndex];
     if (bloque.restriccion) {
-      slots.push({ clase: bloque.restriccion, aula: '-', restriccion: bloque.restriccion });
+      slots[slotIndex] = { clase: bloque.restriccion, aula: '-', restriccion: bloque.restriccion };
       bloquesRestringidos += 1;
-      continue;
+      return;
     }
 
     let claseSeleccionada = null;
@@ -472,20 +553,13 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
       break;
     }
 
-    if (!claseSeleccionada) {
-      slots.push({
-        clase: '-',
-        aula: '-',
-        restriccion: '',
-      });
-      continue;
-    }
+    if (!claseSeleccionada) return;
 
-    slots.push({
+    slots[slotIndex] = {
       clase: claseSeleccionada.clase || '-',
       aula: claseSeleccionada.aula || defaultAula,
       restriccion: '',
-    });
+    };
 
     marcarOcupacion(claseSeleccionada, slotIndex, ocupacionPorSlot);
 
@@ -495,7 +569,7 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
     if (indicePendienteSeleccionado >= 0 && indicePendienteSeleccionado < clasesPendientes.length) {
       clasesPendientes.splice(indicePendienteSeleccionado, 1);
     }
-  }
+  });
 
   const clasesAsignadas = safeArray(clases).length - clasesPendientes.length;
   return { slots, clasesAsignadas, bloquesRestringidos };
@@ -587,8 +661,21 @@ const getGenerationSelection = () => {
 
 const generarHorarioAutomatico = () => {
   const consola = $id('generacion-console');
-  const seleccion = getGenerationSelection();
-  const clasesSeleccion = filtrarClasesPorSeleccion(seleccion);
+  let seleccion = getGenerationSelection();
+  let clasesSeleccion = filtrarClasesPorSeleccion(seleccion);
+
+  if (!clasesSeleccion.length) {
+    const fallback = getPrimeraSeleccionConClases();
+    if (fallback) {
+      seleccion = fallback;
+      clasesSeleccion = filtrarClasesPorSeleccion(seleccion);
+      state.seleccionActual = { ...state.seleccionActual, ...seleccion };
+      syncAppFromSeleccionActual();
+      if (consola) {
+        consola.textContent = `No había clases para la selección elegida. Se generó con datos del CSV para ${seleccion.coordinacion} / ${seleccion.carrera} / ${seleccion.turno}.`;
+      }
+    }
+  }
 
   if (!clasesSeleccion.length) {
     if (consola) consola.textContent = 'No hay clases para la configuración seleccionada. Carga CSV o agrega clases con la misma coordinación/carrera/turno.';
@@ -676,6 +763,9 @@ const saveTurnoConfig = () => {
     creditos: toPositiveNumber(creditosInput?.value, 1),
     maxTurnos: toPositiveNumber(maxTurnosInput?.value, 4),
     dias: getDiasPorTurno(turno),
+    prioridadDias: safeArray(state.turnoConfig[turno]?.prioridadDias).length
+      ? [...state.turnoConfig[turno].prioridadDias]
+      : getDiasArray(turno),
     aula,
     recesoInicio: recesoInicioInput?.value || '',
     recesoFin: recesoFinInput?.value || '',
