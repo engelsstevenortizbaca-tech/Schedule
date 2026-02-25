@@ -332,14 +332,56 @@ const validateSelectedConfig = ({ coordinacion, carrera, turno }) => {
 
 const validateFutureAssignmentRules = () => ({ valid: true, reason: '' });
 
+const buildOcupacionPorSlot = (totalSlots) => {
+  const safeTotalSlots = Number.isInteger(totalSlots) && totalSlots > 0 ? totalSlots : 0;
+  return Array.from({ length: safeTotalSlots }, () => ({ aulas: new Set(), docentes: new Set() }));
+};
+
+const normalizeResourceKey = (value) => safeString(value).trim().toLowerCase();
+
+const getOcupacionSlot = (ocupacionPorSlot, slot) => {
+  if (!Number.isInteger(slot) || slot < 0) return null;
+  if (!Array.isArray(ocupacionPorSlot) || slot >= ocupacionPorSlot.length) return null;
+  return ocupacionPorSlot[slot] || null;
+};
+
+const puedeAsignarse = (clase, slot, ocupacionPorSlot) => {
+  if (!clase) return false;
+
+  const ocupacion = getOcupacionSlot(ocupacionPorSlot, slot);
+  if (!ocupacion) return false;
+
+  const aula = normalizeResourceKey(clase.aula);
+  if (aula && ocupacion.aulas.has(aula)) return false;
+
+  const docente = normalizeResourceKey(clase.docente);
+  if (docente && ocupacion.docentes.has(docente)) return false;
+
+  return true;
+};
+
+const marcarOcupacion = (clase, slot, ocupacionPorSlot) => {
+  if (!clase) return;
+
+  const ocupacion = getOcupacionSlot(ocupacionPorSlot, slot);
+  if (!ocupacion) return;
+
+  const aula = normalizeResourceKey(clase.aula);
+  if (aula) ocupacion.aulas.add(aula);
+
+  const docente = normalizeResourceKey(clase.docente);
+  if (docente) ocupacion.docentes.add(docente);
+};
+
 const generarPlanHorario = ({ turno, clases = [] }) => {
   const bloques = getBloquesVista(turno);
   const dias = getDiasArray(turno);
   const diasCount = Math.max(dias.length, 1);
   const totalSlots = bloques.length * diasCount;
   const defaultAula = getTurnoConfig(turno).aula || '-';
+  const ocupacionPorSlot = buildOcupacionPorSlot(totalSlots);
 
-  let claseIndex = 0;
+  const clasesPendientes = safeArray(clases).map((_, index) => index);
   let bloquesRestringidos = 0;
   const slots = [];
 
@@ -357,26 +399,48 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
       continue;
     }
 
-    const clase = claseIndex >= 0 && claseIndex < clases.length ? clases[claseIndex] : null;
+    let claseSeleccionada = null;
+    let indicePendienteSeleccionado = -1;
 
-    if (clase) {
-      const futureRules = validateFutureAssignmentRules({ clase, slot: slotIndex, bloque, turno, clases });
-      if (!futureRules.valid) {
-        slots.push({ clase: futureRules.reason || '-', aula: '-', restriccion: 'VALIDACION' });
-        continue;
-      }
+    for (let pendingIndex = 0; pendingIndex < clasesPendientes.length; pendingIndex += 1) {
+      const classIndex = clasesPendientes[pendingIndex];
+      if (!Number.isInteger(classIndex) || classIndex < 0 || classIndex >= clases.length) continue;
+
+      const candidate = clases[classIndex];
+      if (!puedeAsignarse(candidate, slotIndex, ocupacionPorSlot)) continue;
+
+      const futureRules = validateFutureAssignmentRules({ clase: candidate, slot: slotIndex, bloque, turno, clases });
+      if (!futureRules.valid) continue;
+
+      claseSeleccionada = candidate;
+      indicePendienteSeleccionado = pendingIndex;
+      break;
+    }
+
+    if (!claseSeleccionada) {
+      slots.push({
+        clase: '-',
+        aula: '-',
+        restriccion: '',
+      });
+      continue;
     }
 
     slots.push({
-      clase: clase?.clase || '-',
-      aula: clase?.aula || defaultAula,
+      clase: claseSeleccionada.clase || '-',
+      aula: claseSeleccionada.aula || defaultAula,
       restriccion: '',
     });
 
-    if (clase) claseIndex += 1;
+    marcarOcupacion(claseSeleccionada, slotIndex, ocupacionPorSlot);
+
+    if (indicePendienteSeleccionado >= 0 && indicePendienteSeleccionado < clasesPendientes.length) {
+      clasesPendientes.splice(indicePendienteSeleccionado, 1);
+    }
   }
 
-  return { slots, clasesAsignadas: claseIndex, bloquesRestringidos };
+  const clasesAsignadas = safeArray(clases).length - clasesPendientes.length;
+  return { slots, clasesAsignadas, bloquesRestringidos };
 };
 
 const renderPlanGenerado = (plan) => {
