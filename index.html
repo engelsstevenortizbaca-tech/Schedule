@@ -233,6 +233,41 @@
     <button class="tab" data-tab="config">⚙️ Configuración</button>
   </footer>
 
+  <div id="slot-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="slot-modal-title">
+    <div class="modal-card">
+      <h3 id="slot-modal-title">Asignar clase al horario</h3>
+      <p class="hint" id="slot-modal-context">Selecciona los datos del slot.</p>
+      <div class="row-2">
+        <div>
+          <label for="slot-dia">Día</label>
+          <select id="slot-dia"></select>
+        </div>
+        <div>
+          <label for="slot-bloque">Bloque</label>
+          <select id="slot-bloque"></select>
+        </div>
+      </div>
+      <div class="row-3">
+        <div>
+          <label for="slot-clase">Clase</label>
+          <select id="slot-clase"></select>
+        </div>
+        <div>
+          <label for="slot-aula">Aula</label>
+          <select id="slot-aula"></select>
+        </div>
+        <div>
+          <label for="slot-docente">Docente</label>
+          <select id="slot-docente"></select>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button id="btn-slot-cancelar" class="btn-outline">Cancelar</button>
+        <button id="btn-slot-guardar" class="btn-dark">Asignar al slot</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
