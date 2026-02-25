@@ -1,24 +1,21 @@
+const $id = (id) => document.getElementById(id);
+
 const tabs = document.querySelectorAll('.tab');
-const principalView = document.getElementById('principal-view');
-const configView = document.getElementById('config-view');
+const principalView = $id('principal-view');
+const configView = $id('config-view');
 const body = document.body;
-
-const switchView = (tabName) => {
-  const showConfig = tabName === 'config';
-  principalView.classList.toggle('active', !showConfig);
-  configView.classList.toggle('active', showConfig);
-};
-
-tabs.forEach((tab) => {
-  tab.addEventListener('click', () => {
-    tabs.forEach((item) => item.classList.remove('active'));
-    tab.classList.add('active');
-    switchView(tab.dataset.tab);
-  });
-});
 
 const coordinaciones = {
   Arquitectura: ['Arquitectura', 'Diseño Gráfico'],
+};
+
+const turnosDisponibles = ['Diurno', 'Sabatino', 'Nocturno', 'Dominical'];
+
+const diasPorTurno = {
+  Diurno: 'Lunes,Martes,Miércoles,Jueves,Viernes',
+  Sabatino: 'Sábado',
+  Nocturno: 'Lunes,Martes,Miércoles,Jueves,Viernes',
+  Dominical: 'Domingo',
 };
 
 const state = {
@@ -41,19 +38,22 @@ const state = {
   seleccionActual: { coordinacion: 'Arquitectura', carrera: 'Arquitectura', turno: 'Diurno' },
 };
 
-const getCarrerasByCoordinacion = (coordinacion) => coordinaciones[coordinacion] || [];
-const getAllCarreras = () => Object.values(coordinaciones).flat();
-
-
-const turnosDisponibles = ['Diurno', 'Sabatino', 'Nocturno', 'Dominical'];
-
-const diasPorTurno = {
-  Diurno: 'Lunes,Martes,Miércoles,Jueves,Viernes',
-  Sabatino: 'Sábado',
-  Nocturno: 'Lunes,Martes,Miércoles,Jueves,Viernes',
-  Dominical: 'Domingo',
+const switchView = (tabName) => {
+  const showConfig = tabName === 'config';
+  principalView?.classList.toggle('active', !showConfig);
+  configView?.classList.toggle('active', showConfig);
 };
 
+tabs.forEach((tab) => {
+  tab.addEventListener('click', () => {
+    tabs.forEach((item) => item.classList.remove('active'));
+    tab.classList.add('active');
+    switchView(tab.dataset.tab);
+  });
+});
+
+const getCarrerasByCoordinacion = (coordinacion) => coordinaciones[coordinacion] || [];
+const getAllCarreras = () => Object.values(coordinaciones).flat();
 const normalizeTurno = (turno = '') => turno.toString().trim().toLowerCase();
 
 const getDiasPorTurno = (turno) => {
@@ -61,9 +61,23 @@ const getDiasPorTurno = (turno) => {
   return state.turnoConfig[turnoMatch]?.dias || diasPorTurno[turnoMatch] || diasPorTurno.Diurno;
 };
 
+const setHint = (id, message, ok = true) => {
+  const hint = $id(id);
+  if (!hint) return;
+  hint.textContent = message;
+  hint.style.color = ok ? '#3257ff' : '#b00020';
+};
+
 const fillSelect = (select, options, selectedValue) => {
+  if (!select) return;
+  const safeOptions = Array.isArray(options) ? options.filter(Boolean) : [];
+  if (!safeOptions.length) {
+    select.innerHTML = '';
+    return;
+  }
+
   select.innerHTML = '';
-  options.forEach((optionValue) => {
+  safeOptions.forEach((optionValue) => {
     const option = document.createElement('option');
     option.value = optionValue;
     option.textContent = optionValue;
@@ -81,9 +95,9 @@ const syncCoordinacionSelects = (selected = 'Arquitectura') => {
 };
 
 const getCoordinacionFromContext = (select) => {
-  const panel = select.closest('section') || select.closest('.view') || document;
+  const panel = select?.closest('section') || select?.closest('.view') || document;
   const coordinacionSelect = panel.querySelector('.js-coordinacion');
-  return coordinacionSelect?.value || state.seleccionActual.coordinacion || Object.keys(coordinaciones)[0];
+  return coordinacionSelect?.value || state.seleccionActual.coordinacion || Object.keys(coordinaciones)[0] || 'Arquitectura';
 };
 
 const syncCarreraSelects = () => {
@@ -104,6 +118,21 @@ const syncTurnoSelects = (selected = 'Diurno') => {
   });
 };
 
+const syncSelectValue = (selector, value) => {
+  document.querySelectorAll(selector).forEach((select) => {
+    if ([...select.options].some((option) => option.value === value)) {
+      select.value = value;
+    }
+  });
+};
+
+const updateSeleccionActual = () => {
+  const defaultCarrera = getAllCarreras()[0] || 'Arquitectura';
+  const coordinacion = $id('carga-coordinacion')?.value || state.seleccionActual.coordinacion || 'Arquitectura';
+  const carrera = $id('carga-carrera')?.value || state.seleccionActual.carrera || defaultCarrera;
+  const turno = $id('carga-turno')?.value || state.seleccionActual.turno || 'Diurno';
+  state.seleccionActual = { coordinacion, carrera, turno };
+};
 
 const formatTimeFromMinutes = (minutes) => {
   const normalized = ((Number(minutes) || 0) % (24 * 60) + (24 * 60)) % (24 * 60);
@@ -120,7 +149,6 @@ const parseTimeToMinutes = (time = '08:00') => {
   if (Number.isNaN(hours) || Number.isNaN(minutes)) return 8 * 60;
   return (hours * 60) + minutes;
 };
-
 
 const rangesOverlap = (startA, endA, startB, endB) => startA < endB && startB < endA;
 
@@ -163,8 +191,8 @@ const getDiasArray = (turno) => (getDiasPorTurno(turno) || 'Día')
 
 const renderVistaTable = (turno) => {
   const bloquesVista = getBloquesVista(turno);
-  const thead = document.getElementById('vista-thead');
-  const tbody = document.getElementById('vista-tbody');
+  const thead = $id('vista-thead');
+  const tbody = $id('vista-tbody');
   if (!thead || !tbody) return;
 
   const dias = getDiasArray(turno);
@@ -191,19 +219,138 @@ const applyDiasByTurnoToView = (turno) => {
   renderVistaTable(turno);
 };
 
-const updateSeleccionActual = () => {
-  const coordinacion = document.getElementById('carga-coordinacion')?.value || 'Arquitectura';
-  const carrera = document.getElementById('carga-carrera')?.value || getAllCarreras()[0] || 'Arquitectura';
-  const turno = document.getElementById('carga-turno')?.value || 'Diurno';
-  state.seleccionActual = { coordinacion, carrera, turno };
+const renderCatalogoTabla = () => {
+  const tbody = $id('clases-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  state.clases.forEach((item) => {
+    const tr = document.createElement('tr');
+    const tags = Array.isArray(item.caracteristicas) ? item.caracteristicas : [];
+    tr.innerHTML = `<td>${item.coordinacion || ''}</td><td>${item.carrera || ''}</td><td>${item.clase || ''}</td><td>${item.aula || ''}</td><td>${tags.map((tag) => `<span class="tag">${tag}</span>`).join(' ')}</td><td>${item.docente || ''}</td><td>${item.area || ''}</td>`;
+    tbody.appendChild(tr);
+  });
 };
 
-const syncSelectValue = (selector, value) => {
-  document.querySelectorAll(selector).forEach((select) => {
-    if ([...select.options].some((option) => option.value === value)) {
-      select.value = value;
-    }
+const renderDocentes = () => {
+  const tbody = $id('docentes-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  state.docentes.forEach((docente) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${docente.nombre}</td><td>${docente.area}</td>`;
+    tbody.appendChild(tr);
   });
+};
+
+const getVistaCells = () => ({
+  claseCells: document.querySelectorAll('#vista-tbody .vista-clase'),
+  aulaCells: document.querySelectorAll('#vista-tbody .vista-aula'),
+});
+
+const paintClaseCell = (cell, value) => {
+  if (!cell) return;
+  cell.textContent = value || '-';
+};
+
+const paintAulaCell = (cell, value) => {
+  if (!cell) return;
+  cell.textContent = value || '-';
+};
+
+const resetScheduleGrid = () => {
+  const { claseCells, aulaCells } = getVistaCells();
+  claseCells.forEach((cell) => paintClaseCell(cell, '-'));
+  aulaCells.forEach((cell) => paintAulaCell(cell, '-'));
+};
+
+const validateSelectedConfig = ({ coordinacion, carrera, turno }) => {
+  const same = state.seleccionActual.coordinacion === coordinacion
+    && state.seleccionActual.carrera === carrera
+    && state.seleccionActual.turno === turno;
+
+  if (same) return { ok: true };
+
+  return {
+    ok: false,
+    message: `La selección actual es ${state.seleccionActual.coordinacion} / ${state.seleccionActual.carrera} / ${state.seleccionActual.turno}. Ajusta la generación o vuelve a cargar clases para esta combinación.`,
+  };
+};
+
+const getClasesForSelection = ({ coordinacion, carrera, turno }) => state.clases.filter((item) => {
+  const matchCoord = item.coordinacion === coordinacion;
+  const matchCarrera = item.carrera === carrera;
+  const matchTurno = (item.turno || 'Diurno') === turno;
+  return matchCoord && matchCarrera && matchTurno;
+});
+
+// Punto de extensión para validaciones futuras de motor (choque de aulas, máximos por día, etc.).
+const validateFutureAssignmentRules = () => ({ valid: true, reason: '' });
+
+const buildSchedulePlan = ({ turno, clases }) => {
+  const bloques = getBloquesVista(turno);
+  const dias = getDiasArray(turno);
+  const diasCount = Math.max(dias.length, 1);
+  const totalSlots = bloques.length * diasCount;
+  const defaultAula = state.turnoConfig[turno]?.aula || '-';
+
+  let claseIndex = 0;
+  let bloquesRestringidos = 0;
+  const slots = [];
+
+  for (let slot = 0; slot < totalSlots; slot += 1) {
+    const blockIndex = Math.floor(slot / diasCount);
+    const bloque = bloques[blockIndex];
+
+    if (!bloque) {
+      slots.push({ clase: '-', aula: '-', restriccion: '' });
+      continue;
+    }
+
+    const restriccion = bloque.restriccion;
+    if (restriccion) {
+      slots.push({ clase: restriccion, aula: '-', restriccion });
+      bloquesRestringidos += 1;
+      continue;
+    }
+
+    const clase = clases[claseIndex] || null;
+
+    if (clase) {
+      const futureRules = validateFutureAssignmentRules({ clase, slot, bloque, turno, clases });
+      if (!futureRules.valid) {
+        slots.push({ clase: futureRules.reason || '-', aula: '-', restriccion: 'VALIDACION' });
+        continue;
+      }
+    }
+
+    slots.push({
+      clase: clase?.clase || '-',
+      aula: clase?.aula || defaultAula,
+      restriccion: '',
+    });
+
+    if (clase) claseIndex += 1;
+  }
+
+  return {
+    slots,
+    clasesAsignadas: claseIndex,
+    bloquesRestringidos,
+  };
+};
+
+const renderSchedulePlan = (plan) => {
+  const { claseCells, aulaCells } = getVistaCells();
+  const limit = Math.min(claseCells.length, aulaCells.length, plan.slots.length);
+
+  for (let i = 0; i < limit; i += 1) {
+    const slot = plan.slots[i];
+    paintClaseCell(claseCells[i], slot.clase);
+    paintAulaCell(aulaCells[i], slot.aula);
+  }
+
+  for (let i = limit; i < claseCells.length; i += 1) paintClaseCell(claseCells[i], '-');
+  for (let i = limit; i < aulaCells.length; i += 1) paintAulaCell(aulaCells[i], '-');
 };
 
 const syncAppFromSeleccionActual = () => {
@@ -216,43 +363,47 @@ const syncAppFromSeleccionActual = () => {
   applyDiasByTurnoToView(state.seleccionActual.turno);
 };
 
-
-const setHint = (id, message, ok = true) => {
-  const hint = document.getElementById(id);
-  if (!hint) return;
-  hint.textContent = message;
-  hint.style.color = ok ? '#3257ff' : '#b00020';
-};
-
-const renderCatalogoTabla = () => {
-  const tbody = document.getElementById('clases-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  state.clases.forEach((item) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${item.coordinacion}</td><td>${item.carrera}</td><td>${item.clase}</td><td>${item.aula || ''}</td><td>${item.caracteristicas.map((tag) => `<span class="tag">${tag}</span>`).join(' ')}</td><td>${item.docente}</td><td>${item.area}</td>`;
-    tbody.appendChild(tr);
-  });
-};
-
-const renderDocentes = () => {
-  const tbody = document.getElementById('docentes-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-  state.docentes.forEach((docente) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${docente.nombre}</td><td>${docente.area}</td>`;
-    tbody.appendChild(tr);
-  });
-};
-
-const menuBtn = document.getElementById('btn-menu');
+const menuBtn = $id('btn-menu');
 menuBtn?.addEventListener('click', () => {
   body.classList.toggle('sidebar-hidden');
 });
 
-const importBtn = document.getElementById('btn-importar-csv');
-const csvInput = document.getElementById('csv-input');
+const parseCsvRows = (text) => {
+  const lines = String(text || '').trim().split(/\r?\n/).filter(Boolean);
+  if (lines.length < 2) return { ok: false, message: 'El CSV no contiene datos válidos.' };
+
+  const headers = lines[0].split(',').map((item) => item.trim().toLowerCase());
+  const required = ['clase', 'creditos', 'compartida', 'anio', 'categoria', 'tipo', 'aula'];
+  const missing = required.filter((field) => !headers.includes(field));
+  if (missing.length) return { ok: false, message: `Faltan columnas: ${missing.join(', ')}` };
+
+  return { ok: true, headers, rows: lines.slice(1) };
+};
+
+const createClassFromCsvRow = (row, headers, context) => {
+  const cols = row.split(',').map((item) => item.trim());
+  const claseIdx = headers.indexOf('clase');
+  const tipoIdx = headers.indexOf('tipo');
+  const aulaIdx = headers.indexOf('aula');
+
+  const aula = cols[aulaIdx];
+  if (!aula) return null;
+
+  return {
+    coordinacion: context.coordinacion,
+    carrera: context.carrera,
+    turno: context.turno,
+    clase: cols[claseIdx] || 'Clase sin nombre',
+    caracteristicas: ['csv', cols[tipoIdx] || 'aula'],
+    docente: 'Por asignar',
+    area: 'Por asignar',
+    aula,
+  };
+};
+
+const importBtn = $id('btn-importar-csv');
+const csvInput = $id('csv-input');
+
 importBtn?.addEventListener('click', () => {
   const file = csvInput?.files?.[0];
   if (!file) {
@@ -260,47 +411,24 @@ importBtn?.addEventListener('click', () => {
     return;
   }
 
+  const context = {
+    coordinacion: $id('carga-coordinacion')?.value || 'Arquitectura',
+    carrera: $id('carga-carrera')?.value || getAllCarreras()[0] || 'Arquitectura',
+    turno: $id('carga-turno')?.value || 'Diurno',
+  };
+
   const reader = new FileReader();
   reader.onload = () => {
-    const text = String(reader.result || '').trim();
-    const lines = text.split(/\r?\n/).filter(Boolean);
-    if (lines.length < 2) {
-      setHint('carga-hint', 'El CSV no contiene datos válidos.', false);
+    const parsed = parseCsvRows(reader.result);
+    if (!parsed.ok) {
+      setHint('carga-hint', parsed.message, false);
       return;
     }
 
-    const headers = lines[0].split(',').map((item) => item.trim().toLowerCase());
-    const required = ['clase', 'creditos', 'compartida', 'anio', 'categoria', 'tipo', 'aula'];
-    const missing = required.filter((field) => !headers.includes(field));
-    if (missing.length) {
-      setHint('carga-hint', `Faltan columnas: ${missing.join(', ')}`, false);
-      return;
-    }
+    const importedValid = parsed.rows
+      .map((line) => createClassFromCsvRow(line, parsed.headers, context))
+      .filter(Boolean);
 
-    const coordinacion = document.getElementById('carga-coordinacion')?.value || 'Arquitectura';
-    const carrera = document.getElementById('carga-carrera')?.value || 'Arquitectura';
-    const turno = document.getElementById('carga-turno')?.value || 'Diurno';
-    const claseIdx = headers.indexOf('clase');
-    const tipoIdx = headers.indexOf('tipo');
-    const aulaIdx = headers.indexOf('aula');
-
-    const imported = lines.slice(1).map((line) => {
-      const cols = line.split(',').map((item) => item.trim());
-      const aula = cols[aulaIdx];
-      if (!aula) return null;
-      return {
-        coordinacion,
-        carrera,
-        turno,
-        clase: cols[claseIdx] || 'Clase sin nombre',
-        caracteristicas: ['csv', cols[tipoIdx] || 'aula'],
-        docente: 'Por asignar',
-        area: 'Por asignar',
-        aula: cols[aulaIdx],
-      };
-    });
-
-    const importedValid = imported.filter(Boolean);
     if (!importedValid.length) {
       setHint('carga-hint', 'No se importó ninguna clase porque falta el aula en las filas del CSV.', false);
       return;
@@ -311,10 +439,11 @@ importBtn?.addEventListener('click', () => {
     renderCatalogoTabla();
     setHint('carga-hint', `Se importaron ${importedValid.length} clases desde CSV.`);
   };
+
   reader.readAsText(file);
 });
 
-const addManualBtn = document.getElementById('btn-agregar-manual');
+const addManualBtn = $id('btn-agregar-manual');
 addManualBtn?.addEventListener('click', () => {
   const clase = window.prompt('Nombre de la clase a agregar:');
   if (!clase) {
@@ -328,9 +457,9 @@ addManualBtn?.addEventListener('click', () => {
     return;
   }
 
-  const coordinacion = document.getElementById('asignacion-coordinacion')?.value || 'Arquitectura';
-  const carrera = document.getElementById('carga-carrera')?.value || getAllCarreras()[0] || 'Arquitectura';
-  const turno = document.getElementById('asignacion-turno')?.value || 'Diurno';
+  const coordinacion = $id('asignacion-coordinacion')?.value || 'Arquitectura';
+  const carrera = $id('carga-carrera')?.value || getAllCarreras()[0] || 'Arquitectura';
+  const turno = $id('asignacion-turno')?.value || 'Diurno';
 
   state.clases.push({
     coordinacion,
@@ -347,160 +476,132 @@ addManualBtn?.addEventListener('click', () => {
   setHint('asignacion-hint', `Clase "${clase}" agregada correctamente.`);
 });
 
-const editClassBtn = document.getElementById('btn-cambiar-clase');
+const editClassBtn = $id('btn-cambiar-clase');
 editClassBtn?.addEventListener('click', () => {
   const nombre = window.prompt('Clase que quieres renombrar:');
   if (!nombre) {
     setHint('asignacion-hint', 'Acción cancelada.', false);
     return;
   }
+
   const found = state.clases.find((item) => item.clase.toLowerCase() === nombre.toLowerCase());
   if (!found) {
     setHint('asignacion-hint', 'No se encontró la clase indicada.', false);
     return;
   }
+
   const nuevoNombre = window.prompt('Nuevo nombre:', found.clase);
   if (!nuevoNombre) {
     setHint('asignacion-hint', 'Renombrado cancelado.', false);
     return;
   }
+
   found.clase = nuevoNombre;
   renderCatalogoTabla();
   setHint('asignacion-hint', 'Clase actualizada correctamente.');
 });
 
-const consola = document.getElementById('generacion-console');
+const consola = $id('generacion-console');
 
-const getVistaCells = () => ({
-  claseCells: document.querySelectorAll('#vista-tbody .vista-clase'),
-  aulaCells: document.querySelectorAll('#vista-tbody .vista-aula'),
-});
-
-const generateBtn = document.getElementById('btn-generar-auto');
+const generateBtn = $id('btn-generar-auto');
 generateBtn?.addEventListener('click', () => {
-  const coordinacion = document.querySelector('#generacion .js-coordinacion')?.value || document.getElementById('carga-coordinacion')?.value;
-  const carrera = document.getElementById('generacion-carrera')?.value;
-  const turno = document.getElementById('generacion-turno')?.value || 'Diurno';
+  const coordinacion = document.querySelector('#generacion .js-coordinacion')?.value || $id('carga-coordinacion')?.value || state.seleccionActual.coordinacion;
+  const carrera = $id('generacion-carrera')?.value || state.seleccionActual.carrera;
+  const turno = $id('generacion-turno')?.value || state.seleccionActual.turno || 'Diurno';
 
-  const clasesSeleccion = state.clases.filter((item) => {
-    const matchCoord = item.coordinacion === coordinacion;
-    const matchCarrera = item.carrera === carrera;
-    const matchTurno = (item.turno || 'Diurno') === turno;
-    return matchCoord && matchCarrera && matchTurno;
-  });
-
+  const clasesSeleccion = getClasesForSelection({ coordinacion, carrera, turno });
   if (!clasesSeleccion.length) {
-    consola.textContent = 'No hay clases para la configuración seleccionada. Carga CSV o agrega clases con la misma coordinación/carrera/turno.';
+    if (consola) consola.textContent = 'No hay clases para la configuración seleccionada. Carga CSV o agrega clases con la misma coordinación/carrera/turno.';
     return;
   }
 
-  const mismaConfiguracion = state.seleccionActual.coordinacion === coordinacion
-    && state.seleccionActual.carrera === carrera
-    && state.seleccionActual.turno === turno;
-
-  if (!mismaConfiguracion) {
-    consola.textContent = `La selección actual es ${state.seleccionActual.coordinacion} / ${state.seleccionActual.carrera} / ${state.seleccionActual.turno}. Ajusta la generación o vuelve a cargar clases para esta combinación.`;
+  const configValidation = validateSelectedConfig({ coordinacion, carrera, turno });
+  if (!configValidation.ok) {
+    if (consola) consola.textContent = configValidation.message;
     return;
   }
 
   applyDiasByTurnoToView(turno);
-  const { claseCells, aulaCells } = getVistaCells();
 
-  let claseIndex = 0;
-  let bloquesRestringidos = 0;
+  const plan = buildSchedulePlan({ turno, clases: clasesSeleccion });
+  renderSchedulePlan(plan);
 
-  claseCells.forEach((cell, index) => {
-    const restriccion = cell.dataset.restriccion;
-    if (restriccion) {
-      cell.textContent = restriccion;
-      aulaCells[index].textContent = '-';
-      bloquesRestringidos += 1;
-      return;
-    }
-
-    const clase = clasesSeleccion[claseIndex];
-    cell.textContent = clase ? clase.clase : '-';
-    aulaCells[index].textContent = clase?.aula || state.turnoConfig[turno]?.aula || '-';
-    if (clase) claseIndex += 1;
-  });
-
-  consola.textContent = `Horario generado para ${coordinacion} / ${carrera} / ${turno}. Clases asignadas: ${claseIndex}. Bloques reservados por receso/almuerzo: ${bloquesRestringidos}.`;
+  if (consola) {
+    consola.textContent = `Horario generado para ${coordinacion} / ${carrera} / ${turno}. Clases asignadas: ${plan.clasesAsignadas}. Bloques reservados por receso/almuerzo: ${plan.bloquesRestringidos}.`;
+  }
 });
 
-const resetBtn = document.getElementById('btn-reiniciar-demo');
+const resetBtn = $id('btn-reiniciar-demo');
 resetBtn?.addEventListener('click', () => {
-  const { claseCells, aulaCells } = getVistaCells();
-  claseCells.forEach((cell) => {
-    cell.textContent = '-';
-  });
-  aulaCells.forEach((cell) => {
-    cell.textContent = '-';
-  });
-  consola.textContent = 'Demo reiniciada. Puedes generar nuevamente.';
+  resetScheduleGrid();
+  if (consola) consola.textContent = 'Demo reiniciada. Puedes generar nuevamente.';
 });
 
-const turnoSelect = document.getElementById('turno-config-select');
-const horaInicioInput = document.getElementById('turno-hora-inicio');
-const duracionInput = document.getElementById('turno-duracion');
-const creditosInput = document.getElementById('turno-creditos');
-const maxTurnosInput = document.getElementById('turno-max-turnos');
-const diasInput = document.getElementById('turno-dias');
-const aulaInput = document.getElementById('turno-aula');
-const recesoInicioInput = document.getElementById('turno-receso-inicio');
-const recesoFinInput = document.getElementById('turno-receso-fin');
-const almuerzoInicioInput = document.getElementById('turno-almuerzo-inicio');
-const almuerzoFinInput = document.getElementById('turno-almuerzo-fin');
+const turnoSelect = $id('turno-config-select');
+const horaInicioInput = $id('turno-hora-inicio');
+const duracionInput = $id('turno-duracion');
+const creditosInput = $id('turno-creditos');
+const maxTurnosInput = $id('turno-max-turnos');
+const diasInput = $id('turno-dias');
+const aulaInput = $id('turno-aula');
+const recesoInicioInput = $id('turno-receso-inicio');
+const recesoFinInput = $id('turno-receso-fin');
+const almuerzoInicioInput = $id('turno-almuerzo-inicio');
+const almuerzoFinInput = $id('turno-almuerzo-fin');
 
 const loadTurno = () => {
   const turno = turnoSelect?.value;
   if (!turno || !state.turnoConfig[turno]) return;
   const cfg = state.turnoConfig[turno];
-  horaInicioInput.value = cfg.horaInicio || '08:00';
-  duracionInput.value = cfg.duracion;
-  creditosInput.value = cfg.creditos;
-  maxTurnosInput.value = cfg.maxTurnos;
-  diasInput.value = cfg.dias || getDiasPorTurno(turno);
-  aulaInput.value = cfg.aula || '';
-  recesoInicioInput.value = cfg.recesoInicio || '';
-  recesoFinInput.value = cfg.recesoFin || '';
-  almuerzoInicioInput.value = cfg.almuerzoInicio || '';
-  almuerzoFinInput.value = cfg.almuerzoFin || '';
+
+  if (horaInicioInput) horaInicioInput.value = cfg.horaInicio || '08:00';
+  if (duracionInput) duracionInput.value = cfg.duracion;
+  if (creditosInput) creditosInput.value = cfg.creditos;
+  if (maxTurnosInput) maxTurnosInput.value = cfg.maxTurnos;
+  if (diasInput) diasInput.value = cfg.dias || getDiasPorTurno(turno);
+  if (aulaInput) aulaInput.value = cfg.aula || '';
+  if (recesoInicioInput) recesoInicioInput.value = cfg.recesoInicio || '';
+  if (recesoFinInput) recesoFinInput.value = cfg.recesoFin || '';
+  if (almuerzoInicioInput) almuerzoInicioInput.value = cfg.almuerzoInicio || '';
+  if (almuerzoFinInput) almuerzoFinInput.value = cfg.almuerzoFin || '';
 };
 
 turnoSelect?.addEventListener('change', () => {
   loadTurno();
-  diasInput.value = getDiasPorTurno(turnoSelect.value);
+  if (diasInput && turnoSelect?.value) diasInput.value = getDiasPorTurno(turnoSelect.value);
 });
 
-document.getElementById('btn-guardar-turno')?.addEventListener('click', () => {
-  const turno = turnoSelect.value;
-  const aula = aulaInput.value.trim();
+$id('btn-guardar-turno')?.addEventListener('click', () => {
+  const turno = turnoSelect?.value;
+  if (!turno) return;
+
+  const aula = aulaInput?.value.trim() || '';
   if (!aula) {
     setHint('turno-hint', 'Debes escribir el aula antes de guardar.', false);
     return;
   }
 
-  if (recesoInicioInput.value && recesoFinInput.value && recesoInicioInput.value >= recesoFinInput.value) {
+  if (recesoInicioInput?.value && recesoFinInput?.value && recesoInicioInput.value >= recesoFinInput.value) {
     setHint('turno-hint', 'El receso debe tener una hora de fin mayor a la de inicio.', false);
     return;
   }
 
-  if (almuerzoInicioInput.value && almuerzoFinInput.value && almuerzoInicioInput.value >= almuerzoFinInput.value) {
+  if (almuerzoInicioInput?.value && almuerzoFinInput?.value && almuerzoInicioInput.value >= almuerzoFinInput.value) {
     setHint('turno-hint', 'El almuerzo debe tener una hora de fin mayor a la de inicio.', false);
     return;
   }
 
   state.turnoConfig[turno] = {
-    horaInicio: horaInicioInput.value || '08:00',
-    duracion: Number(duracionInput.value || 45),
-    creditos: Number(creditosInput.value || 1),
-    maxTurnos: Number(maxTurnosInput.value || 4),
+    horaInicio: horaInicioInput?.value || '08:00',
+    duracion: Number(duracionInput?.value || 45),
+    creditos: Number(creditosInput?.value || 1),
+    maxTurnos: Number(maxTurnosInput?.value || 4),
     dias: getDiasPorTurno(turno),
-    aula: aulaInput.value.trim(),
-    recesoInicio: recesoInicioInput.value || '',
-    recesoFin: recesoFinInput.value || '',
-    almuerzoInicio: almuerzoInicioInput.value || '',
-    almuerzoFin: almuerzoFinInput.value || '',
+    aula,
+    recesoInicio: recesoInicioInput?.value || '',
+    recesoFin: recesoFinInput?.value || '',
+    almuerzoInicio: almuerzoInicioInput?.value || '',
+    almuerzoFin: almuerzoFinInput?.value || '',
   };
 
   state.clases = state.clases.map((item) => {
@@ -508,14 +609,16 @@ document.getElementById('btn-guardar-turno')?.addEventListener('click', () => {
     return { ...item, aula };
   });
 
-  diasInput.value = getDiasPorTurno(turno);
+  if (diasInput) diasInput.value = getDiasPorTurno(turno);
   renderCatalogoTabla();
   applyDiasByTurnoToView(state.seleccionActual.turno);
   setHint('turno-hint', `Configuración de ${turno} guardada. Se respetan receso/almuerzo y bloques desde ${state.turnoConfig[turno].horaInicio}.`);
 });
 
-document.getElementById('btn-restablecer-turno')?.addEventListener('click', () => {
-  const turno = turnoSelect.value;
+$id('btn-restablecer-turno')?.addEventListener('click', () => {
+  const turno = turnoSelect?.value;
+  if (!turno) return;
+
   state.turnoConfig[turno] = {
     horaInicio: turno === 'Nocturno' ? '18:00' : '08:00',
     duracion: 45,
@@ -528,12 +631,13 @@ document.getElementById('btn-restablecer-turno')?.addEventListener('click', () =
     almuerzoInicio: '',
     almuerzoFin: '',
   };
+
   loadTurno();
   applyDiasByTurnoToView(state.seleccionActual.turno);
   setHint('turno-hint', 'Valores restablecidos por defecto.');
 });
 
-document.getElementById('btn-nueva-area')?.addEventListener('click', () => {
+$id('btn-nueva-area')?.addEventListener('click', () => {
   const area = window.prompt('Nombre de la nueva área:');
   if (!area) return;
   if (state.areas.includes(area)) {
@@ -544,7 +648,7 @@ document.getElementById('btn-nueva-area')?.addEventListener('click', () => {
   setHint('docentes-hint', `Área "${area}" creada.`);
 });
 
-document.getElementById('btn-nuevo-docente')?.addEventListener('click', () => {
+$id('btn-nuevo-docente')?.addEventListener('click', () => {
   const nombre = window.prompt('Nombre del docente:');
   if (!nombre) return;
   const area = window.prompt(`Área del docente (${state.areas.join(', ')}):`) || 'Sin área';
@@ -553,30 +657,32 @@ document.getElementById('btn-nuevo-docente')?.addEventListener('click', () => {
   setHint('docentes-hint', `Docente "${nombre}" agregado.`);
 });
 
-document.getElementById('btn-asignar-docente')?.addEventListener('click', () => {
+$id('btn-asignar-docente')?.addEventListener('click', () => {
   const clase = window.prompt('Clase a asignar:');
   if (!clase) return;
+
   const docente = window.prompt('Nombre del docente:');
   if (!docente) return;
+
   const target = state.clases.find((item) => item.clase.toLowerCase() === clase.toLowerCase());
   if (!target) {
     setHint('docentes-hint', 'No se encontró la clase indicada.', false);
     return;
   }
+
   target.docente = docente;
   renderCatalogoTabla();
   setHint('docentes-hint', `Docente asignado a "${target.clase}".`);
 });
 
-const btnAgregarCoordinacion = document.getElementById('btn-agregar-coordinacion');
-const btnAgregarCarrera = document.getElementById('btn-agregar-carrera');
-const nuevaCoordinacionInput = document.getElementById('nueva-coordinacion');
-const nuevaCarreraInput = document.getElementById('nueva-carrera');
-const coordinacionConfigSelect = document.getElementById('coordinacion-config');
+const btnAgregarCoordinacion = $id('btn-agregar-coordinacion');
+const btnAgregarCarrera = $id('btn-agregar-carrera');
+const nuevaCoordinacionInput = $id('nueva-coordinacion');
+const nuevaCarreraInput = $id('nueva-carrera');
+const coordinacionConfigSelect = $id('coordinacion-config');
 
 btnAgregarCoordinacion?.addEventListener('click', () => {
-  const nombre = nuevaCoordinacionInput.value.trim();
-
+  const nombre = nuevaCoordinacionInput?.value.trim() || '';
   if (!nombre) {
     setHint('catalogo-hint', 'Escribe el nombre de la coordinación.', false);
     return;
@@ -590,20 +696,20 @@ btnAgregarCoordinacion?.addEventListener('click', () => {
   coordinaciones[nombre] = [];
   syncCoordinacionSelects(nombre);
   syncCarreraSelects();
-  nuevaCoordinacionInput.value = '';
+  if (nuevaCoordinacionInput) nuevaCoordinacionInput.value = '';
   setHint('catalogo-hint', `Coordinación "${nombre}" agregada correctamente.`);
 });
 
 btnAgregarCarrera?.addEventListener('click', () => {
-  const coordinacion = coordinacionConfigSelect.value;
-  const carrera = nuevaCarreraInput.value.trim();
+  const coordinacion = coordinacionConfigSelect?.value;
+  const carrera = nuevaCarreraInput?.value.trim() || '';
 
   if (!carrera) {
     setHint('catalogo-hint', 'Escribe el nombre de la carrera.', false);
     return;
   }
 
-  if (!coordinaciones[coordinacion]) {
+  if (!coordinacion || !coordinaciones[coordinacion]) {
     setHint('catalogo-hint', 'Primero selecciona una coordinación válida.', false);
     return;
   }
@@ -615,33 +721,24 @@ btnAgregarCarrera?.addEventListener('click', () => {
 
   coordinaciones[coordinacion].push(carrera);
   syncCarreraSelects();
-  nuevaCarreraInput.value = '';
+  if (nuevaCarreraInput) nuevaCarreraInput.value = '';
   setHint('catalogo-hint', `Carrera "${carrera}" agregada a ${coordinacion}.`);
 });
 
-document.getElementById('btn-guardar-matricula')?.addEventListener('click', () => {
-  const carrera = document.getElementById('matricula-carrera').value;
-  const estudiantes = Number(document.getElementById('matricula-estudiantes').value || 0);
+$id('btn-guardar-matricula')?.addEventListener('click', () => {
+  const carrera = $id('matricula-carrera')?.value;
+  if (!carrera) return;
+
+  const estudiantes = Number($id('matricula-estudiantes')?.value || 0);
   state.matricula[carrera] = estudiantes;
   setHint('matricula-hint', `Matrícula guardada para ${carrera}: ${estudiantes} estudiantes.`);
 });
 
-syncCoordinacionSelects();
-syncCarreraSelects();
-syncTurnoSelects();
-updateSeleccionActual();
-syncAppFromSeleccionActual();
-renderCatalogoTabla();
-renderDocentes();
-loadTurno();
-
-
-
 const linkVistaFiltersToSeleccion = () => {
-  const vistaPanel = document.getElementById('vista');
+  const vistaPanel = $id('vista');
   const vistaCoord = vistaPanel?.querySelector('.js-coordinacion');
   const vistaCarrera = vistaPanel?.querySelector('.js-carrera');
-  const vistaTurno = document.getElementById('vista-turno');
+  const vistaTurno = $id('vista-turno');
 
   vistaCoord?.addEventListener('change', (event) => {
     const coordinacion = event.target.value;
@@ -665,7 +762,7 @@ const linkVistaFiltersToSeleccion = () => {
 };
 
 const linkSelectToConfig = (id, key) => {
-  const select = document.getElementById(id);
+  const select = $id(id);
   select?.addEventListener('change', () => {
     state.seleccionActual[key] = select.value;
 
@@ -686,22 +783,29 @@ linkSelectToConfig('carga-turno', 'turno');
 
 linkVistaFiltersToSeleccion();
 
-document.getElementById('coordinacion-config')?.addEventListener('change', (event) => {
+$id('coordinacion-config')?.addEventListener('change', (event) => {
   const value = event.target.value;
   state.seleccionActual.coordinacion = value;
   const carreras = getCarrerasByCoordinacion(value);
-  if (carreras.length) {
-    state.seleccionActual.carrera = carreras[0];
-  }
+  if (carreras.length) state.seleccionActual.carrera = carreras[0];
   syncAppFromSeleccionActual();
 });
 
-document.getElementById('turno-config-select')?.addEventListener('change', (event) => {
+$id('turno-config-select')?.addEventListener('change', (event) => {
   state.seleccionActual.turno = event.target.value;
   syncAppFromSeleccionActual();
 });
 
-document.getElementById('matricula-carrera')?.addEventListener('change', (event) => {
+$id('matricula-carrera')?.addEventListener('change', (event) => {
   state.seleccionActual.carrera = event.target.value;
   syncAppFromSeleccionActual();
 });
+
+syncCoordinacionSelects();
+syncCarreraSelects();
+syncTurnoSelects();
+updateSeleccionActual();
+syncAppFromSeleccionActual();
+renderCatalogoTabla();
+renderDocentes();
+loadTurno();
