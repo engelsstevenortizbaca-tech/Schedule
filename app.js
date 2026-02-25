@@ -8,6 +8,8 @@ const toPositiveNumber = (value, fallback) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+const DEFAULT_MAX_ESTUDIANTES_POR_GRUPO = 35;
+
 const tabs = document.querySelectorAll('.tab');
 const principalView = $id('principal-view');
 const configView = $id('config-view');
@@ -57,7 +59,8 @@ const state = {
     Dominical: getDefaultTurnoConfig('Dominical'),
   },
   matricula: {},
-  seleccionActual: { coordinacion: 'Arquitectura', carrera: 'Arquitectura', turno: 'Diurno' },
+  maxEstudiantesPorGrupo: DEFAULT_MAX_ESTUDIANTES_POR_GRUPO,
+  seleccionActual: { coordinacion: 'Arquitectura', carrera: 'Arquitectura', turno: 'Diurno', grupo: 'G1' },
   schedules: {},
   activeSlotSelection: null,
 };
@@ -160,13 +163,13 @@ const updateSeleccionActual = () => {
   const coordinacion = getSelectValue('carga-coordinacion', state.seleccionActual.coordinacion || 'Arquitectura');
   const carrera = getSelectValue('carga-carrera', state.seleccionActual.carrera || defaultCarrera);
   const turno = getSelectValue('carga-turno', state.seleccionActual.turno || 'Diurno');
-  state.seleccionActual = { coordinacion, carrera, turno: resolveTurnoName(turno) };
+  state.seleccionActual = { ...state.seleccionActual, coordinacion, carrera, turno: resolveTurnoName(turno) };
 };
 
 const getDiasPorTurno = (turno) => getTurnoConfig(turno).dias || diasPorTurno[resolveTurnoName(turno)] || diasPorTurno.Diurno;
 
 
-const getSelectionKey = ({ coordinacion, carrera, turno }) => `${safeString(coordinacion)}::${safeString(carrera)}::${resolveTurnoName(turno)}`;
+const getSelectionKey = ({ coordinacion, carrera, turno, grupo }) => `${safeString(coordinacion)}::${safeString(carrera)}::${resolveTurnoName(turno)}::${safeString(grupo || 'G1')}`;
 
 const createSlotsForTurno = (turno) => {
   const bloques = getBloquesVista(turno);
@@ -190,6 +193,7 @@ const getCurrentVistaSelection = () => ({
   coordinacion: ($id('vista')?.querySelector('.js-coordinacion')?.value) || state.seleccionActual.coordinacion,
   carrera: ($id('vista')?.querySelector('.js-carrera')?.value) || state.seleccionActual.carrera,
   turno: resolveTurnoName(getSelectValue('vista-turno', state.seleccionActual.turno)),
+  grupo: state.seleccionActual.grupo || 'G1',
 });
 
 const getDiasArray = (turno) => safeString(getDiasPorTurno(turno), 'Día')
@@ -456,7 +460,7 @@ const openSlotModal = ({ slotIndex }) => {
   fillSelect($id('slot-docente'), docentes, slot.docente || docentes[0]);
 
   const context = $id('slot-modal-context');
-  if (context) context.textContent = `Asignación para ${selection.coordinacion} / ${selection.carrera} / ${selection.turno}.`;
+  if (context) context.textContent = `Asignación para ${selection.coordinacion} / ${selection.carrera} / ${selection.turno} / ${selection.grupo || 'G1'}.`;
 
   state.activeSlotSelection = { selection, dias, bloques };
   modal.classList.remove('hidden');
@@ -533,6 +537,7 @@ const getPrimeraSeleccionConClases = () => {
     coordinacion: first.coordinacion,
     carrera: first.carrera,
     turno: resolveTurnoName(first.turno || state.seleccionActual.turno || 'Diurno'),
+    grupo: state.seleccionActual.grupo || 'G1',
   };
 };
 
@@ -803,8 +808,19 @@ const getGenerationSelection = () => {
     || getSelectValue('carga-coordinacion', state.seleccionActual.coordinacion);
   const carrera = getSelectValue('generacion-carrera', state.seleccionActual.carrera);
   const turno = resolveTurnoName(getSelectValue('generacion-turno', state.seleccionActual.turno || 'Diurno'));
-  return { coordinacion, carrera, turno };
+  return { coordinacion, carrera, turno, grupo: state.seleccionActual.grupo || 'G1' };
 };
+
+const getMaxEstudiantesPorGrupo = () => Math.max(toPositiveNumber(state.maxEstudiantesPorGrupo, DEFAULT_MAX_ESTUDIANTES_POR_GRUPO), 1);
+
+const getCantidadGruposPorMatricula = (carrera) => {
+  const matriculaCarrera = Math.max(Number(state.matricula[carrera]) || 0, 0);
+  const maxPorGrupo = getMaxEstudiantesPorGrupo();
+  if (matriculaCarrera <= 0) return 1;
+  return Math.max(Math.ceil(matriculaCarrera / maxPorGrupo), 1);
+};
+
+const crearNombreGrupo = (index) => `G${index + 1}`;
 
 const generarHorarioAutomatico = () => {
   const consola = $id('generacion-console');
@@ -814,7 +830,7 @@ const generarHorarioAutomatico = () => {
   if (!clasesSeleccion.length) {
     const fallback = getPrimeraSeleccionConClases();
     if (fallback) {
-      seleccion = fallback;
+      seleccion = { ...seleccion, ...fallback };
       clasesSeleccion = filtrarClasesPorSeleccion(seleccion);
       state.seleccionActual = { ...state.seleccionActual, ...seleccion };
       syncAppFromSeleccionActual();
@@ -837,11 +853,27 @@ const generarHorarioAutomatico = () => {
   }
 
   applyDiasByTurnoToView(seleccion.turno);
-  const plan = generarPlanHorario({ turno: seleccion.turno, clases: clasesSeleccion });
-  renderPlanGenerado(plan, seleccion);
+
+  const cantidadGrupos = getCantidadGruposPorMatricula(seleccion.carrera);
+  const gruposGenerados = Array.from({ length: cantidadGrupos }, (_, index) => {
+    const grupo = crearNombreGrupo(index);
+    const plan = generarPlanHorario({ turno: seleccion.turno, clases: clasesSeleccion });
+    renderPlanGenerado(plan, { ...seleccion, grupo });
+    return { grupo, plan };
+  });
+
+  const grupoPrincipal = gruposGenerados[0]?.grupo || 'G1';
+  state.seleccionActual = { ...state.seleccionActual, ...seleccion, grupo: grupoPrincipal };
+  const keyGrupoPrincipal = getSelectionKey({ ...seleccion, grupo: grupoPrincipal });
+  pintarClasesEnVista(state.schedules[keyGrupoPrincipal] || []);
+
+  const resumenPorGrupo = gruposGenerados
+    .map(({ grupo, plan }) => `${grupo}: ${plan.clasesAsignadas} clases, ${plan.bloquesRestringidos} bloques restringidos`)
+    .join(' | ');
 
   if (consola) {
-    consola.textContent = `Horario generado para ${seleccion.coordinacion} / ${seleccion.carrera} / ${seleccion.turno}. Clases asignadas: ${plan.clasesAsignadas}. Bloques reservados por receso/almuerzo: ${plan.bloquesRestringidos}.`;
+    const matriculaCarrera = Math.max(Number(state.matricula[seleccion.carrera]) || 0, 0);
+    consola.textContent = `Horario generado para ${seleccion.coordinacion} / ${seleccion.carrera} / ${seleccion.turno}. Matrícula: ${matriculaCarrera}. Máx por grupo: ${getMaxEstudiantesPorGrupo()}. Grupos creados: ${cantidadGrupos}. ${resumenPorGrupo}`;
   }
 };
 
@@ -1068,8 +1100,11 @@ const bindEvents = () => {
   $id('btn-slot-guardar')?.addEventListener('click', assignSlotFromModal);
 
   $id('btn-reiniciar-demo')?.addEventListener('click', () => {
-    const key = getSelectionKey(state.seleccionActual);
-    delete state.schedules[key];
+    const prefijo = `${safeString(state.seleccionActual.coordinacion)}::${safeString(state.seleccionActual.carrera)}::${resolveTurnoName(state.seleccionActual.turno)}::`;
+    Object.keys(state.schedules).forEach((key) => {
+      if (key.startsWith(prefijo)) delete state.schedules[key];
+    });
+    state.seleccionActual.grupo = 'G1';
     renderCurrentSelectionSchedule();
     const consola = $id('generacion-console');
     if (consola) consola.textContent = 'Demo reiniciada. Puedes generar nuevamente.';
@@ -1171,9 +1206,17 @@ const bindEvents = () => {
     const carrera = getSelectValue('matricula-carrera');
     if (!carrera) return;
 
-    const estudiantes = Number(getSelectValue('matricula-estudiantes', 0));
-    state.matricula[carrera] = Number.isFinite(estudiantes) ? estudiantes : 0;
-    setHint('matricula-hint', `Matrícula guardada para ${carrera}: ${state.matricula[carrera]} estudiantes.`);
+    const estudiantes = Math.max(Number(getSelectValue('matricula-estudiantes', 0)) || 0, 0);
+    state.matricula[carrera] = estudiantes;
+
+    const maxActual = getMaxEstudiantesPorGrupo();
+    const entradaMax = window.prompt('Máximo de estudiantes por grupo (deja vacío para conservar el valor actual):', String(maxActual));
+    if (entradaMax != null && safeString(entradaMax).trim()) {
+      state.maxEstudiantesPorGrupo = Math.max(toPositiveNumber(entradaMax, maxActual), 1);
+    }
+
+    const grupos = getCantidadGruposPorMatricula(carrera);
+    setHint('matricula-hint', `Matrícula guardada para ${carrera}: ${state.matricula[carrera]} estudiantes. Máx por grupo: ${getMaxEstudiantesPorGrupo()}. Grupos estimados: ${grupos}.`);
   });
 
   linkSelectToConfig('carga-coordinacion', 'coordinacion');
