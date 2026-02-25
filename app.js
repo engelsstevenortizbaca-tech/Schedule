@@ -330,7 +330,53 @@ const validateSelectedConfig = ({ coordinacion, carrera, turno }) => {
   };
 };
 
-const validateFutureAssignmentRules = () => ({ valid: true, reason: '' });
+const getDayIndexFromSlot = (slot, diasCount) => {
+  if (!Number.isInteger(slot) || slot < 0) return -1;
+  const safeDiasCount = Number.isInteger(diasCount) && diasCount > 0 ? diasCount : 1;
+  return slot % safeDiasCount;
+};
+
+const getBlockIndexFromSlot = (slot, diasCount) => {
+  if (!Number.isInteger(slot) || slot < 0) return -1;
+  const safeDiasCount = Number.isInteger(diasCount) && diasCount > 0 ? diasCount : 1;
+  return Math.floor(slot / safeDiasCount);
+};
+
+const getConsecutiveMateriaCount = ({ slots, slot, diasCount, materia }) => {
+  if (!materia) return 0;
+
+  const dayIndex = getDayIndexFromSlot(slot, diasCount);
+  const currentBlock = getBlockIndexFromSlot(slot, diasCount);
+  if (dayIndex < 0 || currentBlock <= 0) return 0;
+
+  let consecutive = 0;
+  for (let blockIndex = currentBlock - 1; blockIndex >= 0; blockIndex -= 1) {
+    const previousSlot = (blockIndex * diasCount) + dayIndex;
+    const assigned = slots[previousSlot];
+    if (!assigned || assigned.restriccion || assigned.clase !== materia) break;
+    consecutive += 1;
+  }
+
+  return consecutive;
+};
+
+const validateFutureAssignmentRules = ({ clase, slot, diasCount, maxClasesPorDia, clasesPorDia, slots }) => {
+  const dayIndex = getDayIndexFromSlot(slot, diasCount);
+  if (dayIndex < 0) return { valid: false, reason: 'Día inválido.' };
+
+  const currentDayCount = clasesPorDia[dayIndex] || 0;
+  if (currentDayCount >= maxClasesPorDia) {
+    return { valid: false, reason: 'Se alcanzó el máximo de clases por día para la carrera.' };
+  }
+
+  const materia = safeString(clase?.clase).trim();
+  const consecutiveMateria = getConsecutiveMateriaCount({ slots, slot, diasCount, materia });
+  if (consecutiveMateria >= 2) {
+    return { valid: false, reason: 'No se permiten más de 2 clases consecutivas de la misma materia.' };
+  }
+
+  return { valid: true, reason: '' };
+};
 
 const buildOcupacionPorSlot = (totalSlots) => {
   const safeTotalSlots = Number.isInteger(totalSlots) && totalSlots > 0 ? totalSlots : 0;
@@ -379,7 +425,9 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
   const diasCount = Math.max(dias.length, 1);
   const totalSlots = bloques.length * diasCount;
   const defaultAula = getTurnoConfig(turno).aula || '-';
+  const maxClasesPorDia = Math.max(toPositiveNumber(getTurnoConfig(turno).maxTurnos, 4), 1);
   const ocupacionPorSlot = buildOcupacionPorSlot(totalSlots);
+  const clasesPorDia = Array.from({ length: diasCount }, () => 0);
 
   const clasesPendientes = safeArray(clases).map((_, index) => index);
   let bloquesRestringidos = 0;
@@ -409,7 +457,14 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
       const candidate = clases[classIndex];
       if (!puedeAsignarse(candidate, slotIndex, ocupacionPorSlot)) continue;
 
-      const futureRules = validateFutureAssignmentRules({ clase: candidate, slot: slotIndex, bloque, turno, clases });
+      const futureRules = validateFutureAssignmentRules({
+        clase: candidate,
+        slot: slotIndex,
+        diasCount,
+        maxClasesPorDia,
+        clasesPorDia,
+        slots,
+      });
       if (!futureRules.valid) continue;
 
       claseSeleccionada = candidate;
@@ -433,6 +488,9 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
     });
 
     marcarOcupacion(claseSeleccionada, slotIndex, ocupacionPorSlot);
+
+    const dayIndex = getDayIndexFromSlot(slotIndex, diasCount);
+    if (dayIndex >= 0) clasesPorDia[dayIndex] = (clasesPorDia[dayIndex] || 0) + 1;
 
     if (indicePendienteSeleccionado >= 0 && indicePendienteSeleccionado < clasesPendientes.length) {
       clasesPendientes.splice(indicePendienteSeleccionado, 1);
