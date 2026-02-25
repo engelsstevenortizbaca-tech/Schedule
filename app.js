@@ -750,6 +750,42 @@ const getClaseConflictMessage = ({ clase, conflictos = [], ultimoMotivo = '' }) 
 
 const getClaseCreditos = (clase, turno) => toPositiveNumber(clase?.creditos, getTurnoConfig(turno).creditos || 1);
 
+const bloquesNecesariosPorClase = (clase, turno = 'Diurno') => {
+  const creditos = getClaseCreditos(clase, turno);
+  return Math.max(Math.ceil(creditos), 1);
+};
+
+const encontrarHuecoContiguo = (slotsDisponibles, bloquesNecesarios) => {
+  const requeridos = Math.max(Number(bloquesNecesarios) || 1, 1);
+  const disponibles = safeArray(slotsDisponibles)
+    .filter((item) => item && Number.isInteger(item.blockIndex) && Number.isInteger(item.slotIndex))
+    .sort((a, b) => a.blockIndex - b.blockIndex);
+
+  if (disponibles.length < requeridos) return [];
+
+  for (let start = 0; start <= (disponibles.length - requeridos); start += 1) {
+    const tramo = disponibles.slice(start, start + requeridos);
+    const consecutivos = tramo.every((item, index) => index === 0 || item.blockIndex === (tramo[index - 1].blockIndex + 1));
+    if (consecutivos) return tramo;
+  }
+
+  return [];
+};
+
+const asignarClaseEnSlots = (clase, slots = []) => {
+  const nombreClase = safeString(clase?.clase).trim() || '-';
+  const aula = safeString(clase?.aula).trim() || '-';
+  const docente = safeString(clase?.docente).trim() || 'Por asignar';
+
+  safeArray(slots).forEach((slot) => {
+    if (!slot) return;
+    slot.clase = nombreClase;
+    slot.aula = aula;
+    slot.docente = docente;
+    slot.restriccion = '';
+  });
+};
+
 const getClasePreferredDayIndexes = (clase, dias = [], turno = 'Diurno') => {
   const safeDias = safeArray(dias);
   const rawPrioridad = [
@@ -795,68 +831,6 @@ const orderClasesParaAsignacion = ({ clases, turno, dias }) => {
     .map((entry) => entry.clase);
 };
 
-const getBestSlotForClase = ({
-  candidate,
-  slots,
-  slotOrderDisponible,
-  diasCount,
-  clasesPorDia,
-  maxClasesPorDia,
-  ocupacionPorSlot,
-  slotsDisponiblesPorDia,
-  dias,
-  turno,
-}) => {
-  const preferredDays = getClasePreferredDayIndexes(candidate, dias, turno);
-  const fallbackPreferredDays = preferredDays.length ? preferredDays : getDayPriorityIndexes(turno, dias);
-  let bestOption = null;
-
-  slotOrderDisponible.forEach((slotIndex, orderIndex) => {
-    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex >= slots.length) return;
-    if (slots[slotIndex]?.clase !== '-') return;
-
-    const conflictosRecurso = getConflictosRecurso(candidate, slotIndex, ocupacionPorSlot);
-    if (conflictosRecurso.length) {
-      bestOption = bestOption || { slotAsignado: -1, conflictosDetectados: [], ultimoMotivoRegla: '' };
-      bestOption.conflictosDetectados = Array.from(new Set([...(bestOption.conflictosDetectados || []), ...conflictosRecurso]));
-      return;
-    }
-
-    const rules = validateFutureAssignmentRules({
-      clase: candidate,
-      slot: slotIndex,
-      diasCount,
-      maxClasesPorDia,
-      clasesPorDia,
-      slots,
-      slotsDisponiblesPorDia,
-    });
-
-    if (!rules.valid) {
-      bestOption = bestOption || { slotAsignado: -1, conflictosDetectados: [], ultimoMotivoRegla: '' };
-      bestOption.ultimoMotivoRegla = rules.reason;
-      return;
-    }
-
-    const dayIndex = getDayIndexFromSlot(slotIndex, diasCount);
-    const blockIndex = getBlockIndexFromSlot(slotIndex, diasCount);
-    const dayLoad = clasesPorDia[dayIndex] || 0;
-    const preferredRank = fallbackPreferredDays.indexOf(dayIndex);
-    const dayRank = preferredRank >= 0 ? preferredRank : fallbackPreferredDays.length;
-
-    const score = [dayLoad, dayRank, blockIndex, orderIndex];
-    const shouldReplace = !bestOption || bestOption.slotAsignado < 0 || score.some((value, index) => {
-      if (value === bestOption.score[index]) return false;
-      const samePrefix = score.slice(0, index).every((item, prefixIndex) => item === bestOption.score[prefixIndex]);
-      return samePrefix && value < bestOption.score[index];
-    });
-
-    if (shouldReplace) bestOption = { slotAsignado: slotIndex, conflictosDetectados: [], ultimoMotivoRegla: '', score };
-  });
-
-  return bestOption || { slotAsignado: -1, conflictosDetectados: [], ultimoMotivoRegla: '' };
-};
-
 const generarPlanHorario = ({ turno, clases = [] }) => {
   const bloques = getBloquesVista(turno);
   const dias = getDiasArray(turno);
@@ -867,81 +841,113 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
   const ocupacionPorSlot = buildOcupacionPorSlot(totalSlots);
   const clasesPorDia = Array.from({ length: diasCount }, () => 0);
   const dayPriorityIndexes = getDayPriorityIndexes(turno, dias);
-  const slotOrder = getSlotIterationOrder({
-    totalSlots,
-    diasCount,
-    bloquesCount: bloques.length,
-    dayPriorityIndexes,
-  });
-
   const clasesEnOrden = orderClasesParaAsignacion({ clases, turno, dias });
   const clasesEnConflicto = [];
+  const clasesNoAsignadas = [];
   let bloquesRestringidos = 0;
   const slots = Array.from({ length: totalSlots }, () => ({ clase: '-', aula: '-', docente: '', restriccion: '' }));
-  const slotOrderDisponible = [];
   const slotsDisponiblesPorDia = Array.from({ length: diasCount }, () => 0);
 
-  slotOrder.forEach((slotIndex) => {
-    const blockIndex = Math.floor(slotIndex / diasCount);
-    if (blockIndex < 0 || blockIndex >= bloques.length) return;
-
-    const bloque = bloques[blockIndex];
-    if (bloque.restriccion) {
-      slots[slotIndex] = { clase: bloque.restriccion, aula: '-', docente: '', restriccion: bloque.restriccion };
-      bloquesRestringidos += 1;
-      return;
+  for (let blockIndex = 0; blockIndex < bloques.length; blockIndex += 1) {
+    for (let dayIndex = 0; dayIndex < diasCount; dayIndex += 1) {
+      const slotIndex = getSlotFromDayAndBlock({ dayIndex, blockIndex, diasCount });
+      const bloque = bloques[blockIndex];
+      if (bloque.restriccion) {
+        slots[slotIndex] = { clase: bloque.restriccion, aula: '-', docente: '', restriccion: bloque.restriccion };
+        bloquesRestringidos += 1;
+        continue;
+      }
+      slotsDisponiblesPorDia[dayIndex] = (slotsDisponiblesPorDia[dayIndex] || 0) + 1;
     }
-
-    slotOrderDisponible.push(slotIndex);
-    const dayIndex = getDayIndexFromSlot(slotIndex, diasCount);
-    if (dayIndex >= 0) slotsDisponiblesPorDia[dayIndex] = (slotsDisponiblesPorDia[dayIndex] || 0) + 1;
-  });
+  }
 
   clasesEnOrden.forEach((candidate, classIndex) => {
-    const best = getBestSlotForClase({
-      candidate,
-      slots,
-      slotOrderDisponible,
-      diasCount,
-      clasesPorDia,
-      maxClasesPorDia,
-      ocupacionPorSlot,
-      slotsDisponiblesPorDia,
-      dias,
-      turno,
-    });
+    const bloquesNecesarios = bloquesNecesariosPorClase(candidate, turno);
+    const preferredDays = getClasePreferredDayIndexes(candidate, dias, turno);
+    const dayOrder = preferredDays.length ? preferredDays : dayPriorityIndexes;
+    const conflictosDetectados = new Set();
+    let ultimoMotivoRegla = '';
+    let slotsAsignables = [];
+    let diaAsignado = -1;
 
-    const slotAsignado = best.slotAsignado;
+    for (let orderIndex = 0; orderIndex < dayOrder.length; orderIndex += 1) {
+      const dayIndex = dayOrder[orderIndex];
+      if (!Number.isInteger(dayIndex) || dayIndex < 0 || dayIndex >= diasCount) continue;
 
-    if (slotAsignado < 0) {
-      clasesEnConflicto.push({
+      const capacidadDia = Math.min(maxClasesPorDia, slotsDisponiblesPorDia[dayIndex] || 0);
+      if ((clasesPorDia[dayIndex] || 0) >= capacidadDia) {
+        ultimoMotivoRegla = 'Se alcanzó el máximo de clases por día para la carrera.';
+        continue;
+      }
+
+      const slotsDia = [];
+      for (let blockIndex = 0; blockIndex < bloques.length; blockIndex += 1) {
+        const slotIndex = getSlotFromDayAndBlock({ dayIndex, blockIndex, diasCount });
+        if (slots[slotIndex]?.restriccion) continue;
+        if (slots[slotIndex]?.clase !== '-') continue;
+
+        const conflictosRecurso = getConflictosRecurso(candidate, slotIndex, ocupacionPorSlot);
+        if (conflictosRecurso.length) {
+          conflictosRecurso.forEach((conflicto) => conflictosDetectados.add(conflicto));
+          continue;
+        }
+
+        slotsDia.push({ slotIndex, blockIndex });
+      }
+
+      const huecoContiguo = encontrarHuecoContiguo(slotsDia, bloquesNecesarios);
+      if (!huecoContiguo.length) {
+        ultimoMotivoRegla = `No hay ${bloquesNecesarios} bloques contiguos disponibles en el mismo día.`;
+        continue;
+      }
+
+      const primerSlot = huecoContiguo[0].slotIndex;
+      const rules = validateFutureAssignmentRules({
+        clase: candidate,
+        slot: primerSlot,
+        diasCount,
+        maxClasesPorDia,
+        clasesPorDia,
+        slots,
+        slotsDisponiblesPorDia,
+      });
+
+      if (!rules.valid) {
+        ultimoMotivoRegla = rules.reason;
+        continue;
+      }
+
+      slotsAsignables = huecoContiguo.map((item) => item.slotIndex);
+      diaAsignado = dayIndex;
+      break;
+    }
+
+    if (!slotsAsignables.length) {
+      const claseNoAsignada = {
         clase: getClaseDisplayName(candidate, classIndex),
         aula: safeString(candidate?.aula).trim() || defaultAula,
         docente: safeString(candidate?.docente).trim() || 'Por asignar',
         motivo: getClaseConflictMessage({
           clase: candidate,
-          conflictos: best.conflictosDetectados,
-          ultimoMotivo: best.ultimoMotivoRegla,
+          conflictos: Array.from(conflictosDetectados),
+          ultimoMotivo: ultimoMotivoRegla,
         }),
-      });
+      };
+      clasesEnConflicto.push(claseNoAsignada);
+      clasesNoAsignadas.push(claseNoAsignada);
       return;
     }
 
-    slots[slotAsignado] = {
-      clase: candidate.clase || '-',
-      aula: candidate.aula || defaultAula,
-      docente: candidate.docente || 'Por asignar',
-      restriccion: '',
-    };
+    const slotsObjetivo = slotsAsignables.map((slotIndex) => slots[slotIndex]);
+    candidate.aula = candidate.aula || defaultAula;
+    asignarClaseEnSlots(candidate, slotsObjetivo);
+    slotsAsignables.forEach((slotIndex) => marcarOcupacion(candidate, slotIndex, ocupacionPorSlot));
 
-    marcarOcupacion(candidate, slotAsignado, ocupacionPorSlot);
-
-    const dayIndex = getDayIndexFromSlot(slotAsignado, diasCount);
-    if (dayIndex >= 0) clasesPorDia[dayIndex] = (clasesPorDia[dayIndex] || 0) + 1;
+    if (diaAsignado >= 0) clasesPorDia[diaAsignado] = (clasesPorDia[diaAsignado] || 0) + 1;
   });
 
   const clasesAsignadas = clasesEnOrden.length - clasesEnConflicto.length;
-  return { slots, clasesAsignadas, bloquesRestringidos, clasesEnConflicto };
+  return { slots, clasesAsignadas, bloquesRestringidos, clasesEnConflicto, clasesNoAsignadas };
 };
 
 const renderPlanGenerado = (plan, selection) => {
@@ -1023,6 +1029,14 @@ const createClassFromCsvRow = (row, headers, context) => {
     .filter(Boolean);
 
   const tipoClase = safeString(cols[tipoIdx]).trim() || 'aula';
+  const creditosRaw = Number(cols[creditosIdx]);
+
+  if (!Number.isFinite(creditosRaw) || creditosRaw < 1) {
+    return {
+      ok: false,
+      reason: 'Créditos inválidos. Deben ser numéricos y mayores o iguales a 1.',
+    };
+  }
 
   return {
     ok: true,
@@ -1031,7 +1045,7 @@ const createClassFromCsvRow = (row, headers, context) => {
       carrera: context.carrera,
       turno: context.turno,
       clase: cols[claseIdx] || 'Clase sin nombre',
-      creditos: toPositiveNumber(cols[creditosIdx], getTurnoConfig(context.turno).creditos || 1),
+      creditos: Math.max(Math.ceil(creditosRaw), 1),
       tipoClase,
       prioridadDias,
       caracteristicas: ['csv', tipoClase],
@@ -1250,7 +1264,7 @@ const generarHorarioAutomatico = () => {
   pintarClasesEnVista(state.schedules[keyGrupoPrincipal] || []);
 
   const resumenPorGrupo = gruposGenerados
-    .map(({ grupo, plan }) => `${grupo}: ${plan.clasesAsignadas} clases, ${plan.bloquesRestringidos} bloques restringidos, ${safeArray(plan.clasesEnConflicto).length} en conflicto`)
+    .map(({ grupo, plan }) => `${grupo}: ${plan.clasesAsignadas} clases, ${plan.bloquesRestringidos} bloques restringidos, ${safeArray(plan.clasesNoAsignadas).length} no asignadas`)
     .join(' | ');
 
   const resumenConflictos = gruposGenerados
