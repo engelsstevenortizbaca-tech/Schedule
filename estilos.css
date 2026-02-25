@@ -289,3 +289,27 @@ th {
 #vista .vista-aula-header {
   min-width: 110px;
 }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(9, 19, 39, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-card {
+  width: min(860px, 100%);
+  background: #f1f3f7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+}

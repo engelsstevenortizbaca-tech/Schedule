@@ -58,6 +58,8 @@ const state = {
   },
   matricula: {},
   seleccionActual: { coordinacion: 'Arquitectura', carrera: 'Arquitectura', turno: 'Diurno' },
+  schedules: {},
+  activeSlotSelection: null,
 };
 
 const normalizeTurno = (turno = '') => safeString(turno).trim().toLowerCase();
@@ -162,6 +164,33 @@ const updateSeleccionActual = () => {
 };
 
 const getDiasPorTurno = (turno) => getTurnoConfig(turno).dias || diasPorTurno[resolveTurnoName(turno)] || diasPorTurno.Diurno;
+
+
+const getSelectionKey = ({ coordinacion, carrera, turno }) => `${safeString(coordinacion)}::${safeString(carrera)}::${resolveTurnoName(turno)}`;
+
+const createSlotsForTurno = (turno) => {
+  const bloques = getBloquesVista(turno);
+  const dias = getDiasArray(turno);
+  const diasCount = Math.max(dias.length, 1);
+  return bloques.flatMap((bloque) => Array.from({ length: diasCount }, () => ({
+    clase: bloque.restriccion || '-',
+    aula: '-',
+    docente: '',
+    restriccion: bloque.restriccion || '',
+  })));
+};
+
+const getOrCreateSchedule = (selection) => {
+  const key = getSelectionKey(selection);
+  if (!state.schedules[key]) state.schedules[key] = createSlotsForTurno(selection.turno);
+  return state.schedules[key];
+};
+
+const getCurrentVistaSelection = () => ({
+  coordinacion: ($id('vista')?.querySelector('.js-coordinacion')?.value) || state.seleccionActual.coordinacion,
+  carrera: ($id('vista')?.querySelector('.js-carrera')?.value) || state.seleccionActual.carrera,
+  turno: resolveTurnoName(getSelectValue('vista-turno', state.seleccionActual.turno)),
+});
 
 const getDiasArray = (turno) => safeString(getDiasPorTurno(turno), 'Día')
   .split(',')
@@ -376,6 +405,119 @@ const pintarClasesEnVista = (slots = []) => {
   }
 };
 
+
+const getSlotFromDayAndBlock = ({ dayIndex, blockIndex, diasCount }) => (blockIndex * diasCount) + dayIndex;
+
+const getSlotConflictMessage = ({ slots, slotIndex, aula, docente }) => {
+  const target = slots[slotIndex];
+  if (!target || target.restriccion) return '';
+
+  const alreadyHasClass = safeString(target.clase).trim() && target.clase !== '-';
+  if (!alreadyHasClass) return '';
+
+  const aulaConflict = normalizeResourceKey(aula) && normalizeResourceKey(target.aula) === normalizeResourceKey(aula);
+  const docenteConflict = normalizeResourceKey(docente) && normalizeResourceKey(target.docente) === normalizeResourceKey(docente);
+
+  if (aulaConflict || docenteConflict) return 'Conflicto detectado: aula o docente ya ocupados en ese bloque.';
+  return 'El slot seleccionado ya tiene una clase asignada.';
+};
+
+const openSlotModal = ({ slotIndex }) => {
+  const modal = $id('slot-modal');
+  if (!modal) return;
+
+  const selection = getCurrentVistaSelection();
+  const dias = getDiasArray(selection.turno);
+  const bloques = getBloquesVista(selection.turno);
+  const schedule = getOrCreateSchedule(selection);
+
+  const dayIndex = getDayIndexFromSlot(slotIndex, dias.length);
+  const blockIndex = getBlockIndexFromSlot(slotIndex, dias.length);
+  const slot = schedule[slotIndex] || { clase: '-', aula: '-', docente: '' };
+
+  fillSelect($id('slot-dia'), dias, dias[dayIndex] || dias[0]);
+  fillSelect($id('slot-bloque'), bloques.map((b, idx) => `${idx + 1} · ${b.hora}`), `${(blockIndex + 1)} · ${(bloques[blockIndex] || bloques[0]).hora}`);
+
+  const clases = filtrarClasesPorSeleccion(selection);
+  const classNames = clases.map((item) => item.clase).filter(Boolean);
+  fillSelect($id('slot-clase'), classNames, slot.clase && slot.clase !== '-' ? slot.clase : classNames[0]);
+
+  const aulas = Array.from(new Set([
+    ...clases.map((item) => item.aula),
+    ...safeArray(state.clases).map((item) => item.aula),
+    getTurnoConfig(selection.turno).aula,
+  ].filter(Boolean)));
+  fillSelect($id('slot-aula'), aulas, slot.aula && slot.aula !== '-' ? slot.aula : aulas[0]);
+
+  const docentes = Array.from(new Set([
+    ...safeArray(state.docentes).map((item) => item.nombre),
+    ...clases.map((item) => item.docente),
+  ].filter(Boolean)));
+  fillSelect($id('slot-docente'), docentes, slot.docente || docentes[0]);
+
+  const context = $id('slot-modal-context');
+  if (context) context.textContent = `Asignación para ${selection.coordinacion} / ${selection.carrera} / ${selection.turno}.`;
+
+  state.activeSlotSelection = { selection, dias, bloques };
+  modal.classList.remove('hidden');
+};
+
+const closeSlotModal = () => {
+  const modal = $id('slot-modal');
+  if (modal) modal.classList.add('hidden');
+  state.activeSlotSelection = null;
+};
+
+const assignSlotFromModal = () => {
+  const active = state.activeSlotSelection;
+  if (!active) return;
+
+  const { selection, dias, bloques } = active;
+  const dayValue = getSelectValue('slot-dia');
+  const blockValue = getSelectValue('slot-bloque');
+  const clase = safeString(getSelectValue('slot-clase')).trim();
+  const aula = safeString(getSelectValue('slot-aula')).trim();
+  const docente = safeString(getSelectValue('slot-docente')).trim();
+
+  const dayIndex = dias.findIndex((dia) => normalizeText(dia) === normalizeText(dayValue));
+  const blockIndex = Number(safeString(blockValue).split('·')[0].trim()) - 1;
+
+  if (dayIndex < 0 || blockIndex < 0 || blockIndex >= bloques.length) {
+    setHint('asignacion-hint', 'Día o bloque inválidos para la asignación manual.', false);
+    return;
+  }
+
+  if (!clase || !aula || !docente) {
+    setHint('asignacion-hint', 'Debes seleccionar clase, aula y docente.', false);
+    return;
+  }
+
+  const slots = getOrCreateSchedule(selection);
+  const targetSlot = getSlotFromDayAndBlock({ dayIndex, blockIndex, diasCount: dias.length });
+
+  if (slots[targetSlot]?.restriccion) {
+    setHint('asignacion-hint', `No puedes asignar en este bloque: ${slots[targetSlot].restriccion}.`, false);
+    return;
+  }
+
+  const conflict = getSlotConflictMessage({ slots, slotIndex: targetSlot, aula, docente });
+  if (conflict) {
+    setHint('asignacion-hint', conflict, false);
+    return;
+  }
+
+  slots[targetSlot] = { clase, aula, docente, restriccion: '' };
+  pintarClasesEnVista(slots);
+  setHint('asignacion-hint', `Clase "${clase}" asignada a ${dias[dayIndex]}, bloque ${blockIndex + 1}.`);
+  closeSlotModal();
+};
+
+const renderCurrentSelectionSchedule = () => {
+  const selection = getCurrentVistaSelection();
+  const slots = getOrCreateSchedule(selection);
+  pintarClasesEnVista(slots);
+};
+
 const filtrarClasesPorSeleccion = ({ coordinacion, carrera, turno }) => safeArray(state.clases).filter((item) => {
   const matchCoord = normalizeText(item.coordinacion) === normalizeText(coordinacion);
   const matchCarrera = normalizeText(item.carrera) === normalizeText(carrera);
@@ -575,8 +717,12 @@ const generarPlanHorario = ({ turno, clases = [] }) => {
   return { slots, clasesAsignadas, bloquesRestringidos };
 };
 
-const renderPlanGenerado = (plan) => {
+const renderPlanGenerado = (plan, selection) => {
   const slots = safeArray(plan?.slots);
+  if (selection) {
+    const key = getSelectionKey(selection);
+    state.schedules[key] = slots.map((slot) => ({ ...slot, docente: slot.docente || '' }));
+  }
   pintarClasesEnVista(slots);
 };
 
@@ -588,6 +734,7 @@ const syncAppFromSeleccionActual = () => {
   syncSelectValue('.js-turno', state.seleccionActual.turno);
   syncSelectValue('.js-carrera', state.seleccionActual.carrera);
   applyDiasByTurnoToView(state.seleccionActual.turno);
+  renderCurrentSelectionSchedule();
 };
 
 const parseCsvRows = (text) => {
@@ -691,7 +838,7 @@ const generarHorarioAutomatico = () => {
 
   applyDiasByTurnoToView(seleccion.turno);
   const plan = generarPlanHorario({ turno: seleccion.turno, clases: clasesSeleccion });
-  renderPlanGenerado(plan);
+  renderPlanGenerado(plan, seleccion);
 
   if (consola) {
     consola.textContent = `Horario generado para ${seleccion.coordinacion} / ${seleccion.carrera} / ${seleccion.turno}. Clases asignadas: ${plan.clasesAsignadas}. Bloques reservados por receso/almuerzo: ${plan.bloquesRestringidos}.`;
@@ -907,8 +1054,23 @@ const bindEvents = () => {
 
   $id('btn-generar-auto')?.addEventListener('click', generarHorarioAutomatico);
 
+
+  $id('vista-table')?.addEventListener('click', (event) => {
+    const cell = event.target?.closest?.('.vista-clase, .vista-aula');
+    if (!cell) return;
+
+    const slot = Number(cell.dataset?.slot);
+    if (!Number.isInteger(slot) || slot < 0) return;
+    openSlotModal({ slotIndex: slot });
+  });
+
+  $id('btn-slot-cancelar')?.addEventListener('click', closeSlotModal);
+  $id('btn-slot-guardar')?.addEventListener('click', assignSlotFromModal);
+
   $id('btn-reiniciar-demo')?.addEventListener('click', () => {
-    limpiarVista();
+    const key = getSelectionKey(state.seleccionActual);
+    delete state.schedules[key];
+    renderCurrentSelectionSchedule();
     const consola = $id('generacion-console');
     if (consola) consola.textContent = 'Demo reiniciada. Puedes generar nuevamente.';
   });
