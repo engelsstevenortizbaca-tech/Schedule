@@ -9,6 +9,7 @@ const toPositiveNumber = (value, fallback) => {
 };
 
 const DEFAULT_MAX_ESTUDIANTES_POR_GRUPO = 35;
+const TURNO_CONFIG_STORAGE_KEY = 'schedule.turnoConfig.v1';
 
 const tabs = document.querySelectorAll('.tab');
 const principalView = $id('principal-view');
@@ -63,6 +64,73 @@ const state = {
   seleccionActual: { coordinacion: 'Arquitectura', carrera: 'Arquitectura', turno: 'Diurno', grupo: 'G1' },
   schedules: {},
   activeSlotSelection: null,
+};
+
+const normalizeDiasInput = (diasValue) => safeString(diasValue)
+  .split(',')
+  .map((dia) => dia.trim())
+  .filter(Boolean);
+
+const sanitizeTurnoConfigForStorage = (turno, rawConfig = {}) => {
+  const turnoName = resolveTurnoName(turno);
+  const defaults = getDefaultTurnoConfig(turnoName);
+  const diasList = normalizeDiasInput(rawConfig.dias || defaults.dias);
+  const diasString = diasList.join(',') || defaults.dias;
+  const prioridadBase = Array.isArray(rawConfig.prioridadDias)
+    ? rawConfig.prioridadDias
+    : normalizeDiasInput(rawConfig.prioridadDias);
+
+  const prioridadDias = prioridadBase
+    .map((dia) => safeString(dia).trim())
+    .filter((dia, index, arr) => dia && arr.findIndex((item) => normalizeText(item) === normalizeText(dia)) === index);
+
+  const prioridadFinal = prioridadDias.length ? prioridadDias : normalizeDiasInput(diasString);
+
+  return {
+    turno: turnoName,
+    dias: diasString,
+    duracion: toPositiveNumber(rawConfig.duracion, defaults.duracion),
+    maxTurnos: toPositiveNumber(rawConfig.maxTurnos, defaults.maxTurnos),
+    prioridadDias: prioridadFinal,
+  };
+};
+
+const saveTurnoConfigToLocalStorage = () => {
+  const payload = turnosDisponibles.reduce((acc, turno) => {
+    acc[turno] = sanitizeTurnoConfigForStorage(turno, state.turnoConfig[turno]);
+    return acc;
+  }, {});
+
+  try {
+    window.localStorage.setItem(TURNO_CONFIG_STORAGE_KEY, JSON.stringify(payload));
+  } catch (error) {
+    console.warn('No se pudo guardar la configuración de turno en localStorage.', error);
+  }
+};
+
+const loadTurnoConfigFromLocalStorage = () => {
+  try {
+    const raw = window.localStorage.getItem(TURNO_CONFIG_STORAGE_KEY);
+    if (!raw) return;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return;
+
+    turnosDisponibles.forEach((turno) => {
+      if (!parsed[turno]) return;
+      const saved = sanitizeTurnoConfigForStorage(turno, parsed[turno]);
+      state.turnoConfig[turno] = {
+        ...getDefaultTurnoConfig(turno),
+        ...(state.turnoConfig[turno] || {}),
+        dias: saved.dias,
+        duracion: saved.duracion,
+        maxTurnos: saved.maxTurnos,
+        prioridadDias: saved.prioridadDias,
+      };
+    });
+  } catch (error) {
+    console.warn('No se pudo cargar la configuración de turno desde localStorage.', error);
+  }
 };
 
 const normalizeTurno = (turno = '') => safeString(turno).trim().toLowerCase();
@@ -1260,16 +1328,26 @@ const saveTurnoConfig = () => {
     return;
   }
 
+  const diasCalculados = getDiasPorTurno(turno);
+  const prioridadActual = safeArray(state.turnoConfig[turno]?.prioridadDias).length
+    ? [...state.turnoConfig[turno].prioridadDias]
+    : normalizeDiasInput(diasCalculados);
+
+  const persistable = sanitizeTurnoConfigForStorage(turno, {
+    dias: diasCalculados,
+    duracion: toPositiveNumber(duracionInput?.value, 45),
+    maxTurnos: toPositiveNumber(maxTurnosInput?.value, 4),
+    prioridadDias: prioridadActual,
+  });
+
   state.turnoConfig[turno] = {
     ...getDefaultTurnoConfig(turno),
     horaInicio: horaInicioInput?.value || getDefaultTurnoConfig(turno).horaInicio,
-    duracion: toPositiveNumber(duracionInput?.value, 45),
+    duracion: persistable.duracion,
     creditos: toPositiveNumber(creditosInput?.value, 1),
-    maxTurnos: toPositiveNumber(maxTurnosInput?.value, 4),
-    dias: getDiasPorTurno(turno),
-    prioridadDias: safeArray(state.turnoConfig[turno]?.prioridadDias).length
-      ? [...state.turnoConfig[turno].prioridadDias]
-      : getDiasArray(turno),
+    maxTurnos: persistable.maxTurnos,
+    dias: persistable.dias,
+    prioridadDias: persistable.prioridadDias,
     aula,
     recesoInicio: recesoInicioInput?.value || '',
     recesoFin: recesoFinInput?.value || '',
@@ -1283,6 +1361,7 @@ const saveTurnoConfig = () => {
   });
 
   if (diasInput) diasInput.value = getDiasPorTurno(turno);
+  saveTurnoConfigToLocalStorage();
   renderCatalogoTabla();
   applyDiasByTurnoToView(state.seleccionActual.turno);
   setHint('turno-hint', `Configuración de ${turno} guardada. Se respetan receso/almuerzo y bloques desde ${state.turnoConfig[turno].horaInicio}.`);
@@ -1293,6 +1372,7 @@ const resetTurnoConfig = () => {
   if (!turno) return;
 
   state.turnoConfig[turno] = getDefaultTurnoConfig(turno);
+  saveTurnoConfigToLocalStorage();
   loadTurno();
   applyDiasByTurnoToView(state.seleccionActual.turno);
   setHint('turno-hint', 'Valores restablecidos por defecto.');
@@ -1591,6 +1671,7 @@ const bindEvents = () => {
 };
 
 const init = () => {
+  loadTurnoConfigFromLocalStorage();
   syncCoordinacionSelects();
   syncCarreraSelects();
   syncTurnoSelects();
