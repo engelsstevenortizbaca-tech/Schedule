@@ -183,11 +183,11 @@ input[type="time"] {
 }
 
 button {
-  height: 34px;
-  border-radius: 5px;
-  border: 1px solid transparent;
-  padding: 0 12px;
+  height: 36px;
+  border-radius: 8px;
   font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
 }
 
 .btn-primary {
@@ -195,15 +195,28 @@ button {
   color: #fff;
 }
 
+.btn-primary:hover {
+  background: var(--primary-dark);
+}
+
 .btn-dark {
-  background: #273956;
+  background: #0f172a;
   color: #fff;
 }
 
+.btn-dark:hover {
+  background: #1e293b;
+}
+
 .btn-outline {
-  border-color: #4b6dde;
-  color: #355ad1;
+  border: 1px solid var(--primary);
+  color: var(--primary);
   background: #f6f8ff;
+}
+
+.btn-outline:hover {
+  background: var(--primary);
+  color: #fff;
 }
 
 table {
