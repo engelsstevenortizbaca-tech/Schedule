@@ -219,31 +219,34 @@ button {
   color: #fff;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  background: #fff;
+#vista table {
+  border-radius: 12px;
+  overflow: hidden;
+  background: white;
 }
 
-th,
-td {
-  border-top: 1px solid #d6deea;
-  padding: 8px;
-  text-align: left;
+#vista th {
+  background: #f1f5ff;
+  text-align: center;
 }
 
-th {
-  font-weight: 700;
-  color: #22324f;
-  background: #f9fbff;
+#vista td {
+  height: 55px;
+  text-align: center;
+  font-weight: 500;
+  transition: 0.2s ease;
 }
 
-.tag {
-  background: #dfe6f4;
-  color: #425a84;
-  border-radius: 99px;
-  padding: 1px 6px;
+.vista-clase {
+  cursor: pointer;
+}
+
+.vista-clase:hover {
+  background: #e0eaff;
+}
+
+.vista-aula {
+  color: var(--muted);
   font-size: 11px;
 }
 
