@@ -45,39 +45,16 @@ body {
 
 .sidebar {
   position: fixed;
-  top: 58px;
+  top: 60px;              /* altura real del topbar */
   left: 0;
-  bottom: 44px;
-  width: 220px;
-  background: var(--nav);
-  border-right: 1px solid #1a2947;
-  padding: 10px;
-}
-
-.sidebar {
-  position: fixed;
-  top: 60px;
-  left: 0;
-  bottom: 0;
+  bottom: 44px;          /* altura del footer bottom-tabs */
   width: 240px;
   background: #0b1735;
   border-right: 1px solid #182a55;
   padding: 16px;
-  transition: 0.3s ease;
-}
-
-.sidebar nav a {
-  display: block;
-  padding: 10px;
-  border-radius: 8px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.05);
-  transition: 0.2s ease;
-}
-
-.sidebar nav a:hover {
-  background: var(--primary);
-  transform: translateX(4px);
+  overflow-y: auto;      /* evita que el contenido se corte */
+  transition: transform 0.25s ease;
+  z-index: 40;
 }
 .content {
   margin-left: 220px;
