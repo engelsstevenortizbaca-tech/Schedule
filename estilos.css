@@ -18,19 +18,20 @@ body {
   min-height: 100vh;
 }
 .topbar {
-  height: 58px;
-  background: var(--nav);
+  height: 60px;
+  background: linear-gradient(120deg, var(--nav), var(--nav-light));
   color: #fff;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-  border-bottom: 1px solid #1a2947;
+  gap: 14px;
+  padding: 0 18px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .topbar h1 {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .3px;
 }
 
 .icon-btn {
