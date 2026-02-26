@@ -251,11 +251,13 @@ button {
 }
 
 .console {
-  background: #050f25;
-  color: #f2f6ff;
-  border-radius: 6px;
-  padding: 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 12px;
+  padding: 14px;
   font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid #1e293b;
 }
 
 .bottom-tabs {
