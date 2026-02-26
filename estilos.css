@@ -1,25 +1,22 @@
 :root {
-  --bg: #dfe3ea;
-  --nav: #08132b;
-  --line: #c8d0dc;
-  --text: #0e1a2d;
-  --soft: #f4f6f9;
-  --primary: #2b57d6;
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  font-family: "Inter", sans-serif;
+  --bg: #eef2f8;
+  --nav: #0f1f49;
+  --nav-light: #1d4ed8;
+  --card: #ffffff;
+  --line: #dbe2ef;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --primary: #1d4ed8;
+  --primary-dark: #163da7;
+  --success: #16a34a;
+  --danger: #b91c1c;
 }
 
 body {
-  background: var(--bg);
+  background: radial-gradient(circle at top, #f8faff 0%, #eef3fb 50%, var(--bg) 100%);
   color: var(--text);
   min-height: 100vh;
 }
-
 .topbar {
   height: 58px;
   background: var(--nav);
