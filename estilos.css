@@ -54,26 +54,31 @@ body {
   padding: 10px;
 }
 
-.sidebar h2 {
-  color: #c8d5ee;
-  font-size: 14px;
-  margin-bottom: 10px;
+.sidebar {
+  position: fixed;
+  top: 60px;
+  left: 0;
+  bottom: 0;
+  width: 240px;
+  background: #0b1735;
+  border-right: 1px solid #182a55;
+  padding: 16px;
+  transition: 0.3s ease;
 }
 
-.sidebar nav {
-  display: grid;
-  gap: 8px;
+.sidebar nav a {
+  display: block;
+  padding: 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  transition: 0.2s ease;
 }
 
-.sidebar a {
-  color: #e6efff;
-  text-decoration: none;
-  border: 1px solid #3c4b69;
-  border-radius: 7px;
-  padding: 8px;
-  font-size: 13px;
+.sidebar nav a:hover {
+  background: var(--primary);
+  transform: translateX(4px);
 }
-
 .content {
   margin-left: 220px;
   padding: 12px;
