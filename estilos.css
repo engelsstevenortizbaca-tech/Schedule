@@ -62,23 +62,6 @@ body {
   padding-bottom: 56px;
 }
 
-
-body.sidebar-hidden .sidebar {
-  display: none;
-}
-
-body.sidebar-hidden .content {
-  margin-left: 0;
-}
-
-.view {
-  display: none;
-}
-
-.view.active {
-  display: block;
-}
-
 .panel {
   background: var(--card);
   border: 1px solid var(--line);
